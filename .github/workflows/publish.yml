@@ -83,3 +83,5 @@ jobs:
           git add -A
           git commit -m 'Publish CapPicker 1.0.0 source and builds'
           git push
+
+# Complete payload staged; this update starts the final publish run.
