@@ -1,10 +1,9 @@
-name: Publish CapPicker 1.0.0
+name: Finalize CapPicker 1.0.0
 
 on:
   push:
     branches: [ main ]
     paths:
-      - '.payload/source/**'
       - '.github/workflows/publish.yml'
   workflow_dispatch:
 
@@ -12,76 +11,91 @@ permissions:
   contents: write
 
 jobs:
-  publish:
+  finalize:
     if: github.actor != 'github-actions[bot]'
     runs-on: windows-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Restore source package
+      - name: Restore verified local-built executable
         shell: powershell
         run: |
-          $parts = Get-ChildItem '.payload/source/part*.b64' | Sort-Object Name
-          if ($parts.Count -ne 12) { throw "Expected 12 source payload parts, found $($parts.Count)." }
+          $parts = Get-ChildItem '.payload/current-exe/part*.b64' | Sort-Object Name
+          if ($parts.Count -ne 8) { throw "Expected 8 payload parts, found $($parts.Count)." }
           $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
-          [IO.File]::WriteAllBytes('CapPicker_source.tar.xz', [Convert]::FromBase64String($b64))
-          New-Item -ItemType Directory -Force '_restore' | Out-Null
-          tar -xf 'CapPicker_source.tar.xz' -C '_restore'
-          Get-ChildItem '_restore' -Force | ForEach-Object { Copy-Item $_.FullName -Destination '.' -Recurse -Force }
-
-      - name: Build CapPicker
-        shell: powershell
-        run: |
-          $csc64 = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
-          $csc32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
-          if (Test-Path $csc64) { $csc = $csc64; $platform = 'x64' }
-          elseif (Test-Path $csc32) { $csc = $csc32; $platform = 'x86' }
-          else { throw 'Windows .NET Framework C# compiler not found.' }
-
-          $sources = @(
-            'AssemblyInfo.cs','L10n.cs','HelpForm.cs','Program.cs','Native.cs',
-            'CaptureService.cs','Ui.cs','SelectionOverlay.cs','WindowPicker.cs',
-            'ColorPicker.cs','Editor.cs','MainForm.cs'
-          )
-          $args = @(
-            '/nologo','/target:winexe','/optimize+','/debug-',"/platform:$platform",
-            '/out:CapPicker.exe','/win32icon:CapPicker.ico','/win32manifest:app.manifest',
-            '/reference:System.dll','/reference:System.Drawing.dll','/reference:System.Windows.Forms.dll'
-          ) + $sources
-          & $csc $args
-          if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
-
-      - name: Package 1.0.0
-        shell: powershell
-        run: |
+          [IO.File]::WriteAllBytes('cappicker_payload.zip', [Convert]::FromBase64String($b64))
+          New-Item -ItemType Directory -Force '_package' | Out-Null
+          Expand-Archive -Path 'cappicker_payload.zip' -DestinationPath '_package' -Force
+          $exe = Get-ChildItem '_package' -Recurse -Filter 'CapPicker.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'CapPicker.exe was not found in the payload.' }
+          $hash = (Get-FileHash $exe.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          $expected = 'b18a3a5fcb8610dba0afdbec4598cf65d573dec1a10d8d894dd26814e5f1ac12'
+          if ($hash -ne $expected) { throw "Executable hash mismatch: $hash" }
           New-Item -ItemType Directory -Force 'dist' | Out-Null
-          Copy-Item 'CapPicker.exe' 'dist/CapPicker.exe' -Force
-          Compress-Archive -Path 'CapPicker.exe','README.txt' -DestinationPath 'dist/CapPicker_1.0.0_Portable.zip' -Force
-          $sourceFiles = @(
-            'WindowPicker.cs','Editor.cs','ColorPicker.cs','BUILD.cmd','SelectionOverlay.cs',
-            'L10n.cs','CapPicker.ico','app.manifest','Ui.cs','README.txt','CaptureService.cs',
-            'HelpForm.cs','Native.cs','MainForm.cs','AssemblyInfo.cs','Program.cs'
-          )
-          Compress-Archive -Path $sourceFiles -DestinationPath 'dist/CapPicker_1.0.0_LocalBuild.zip' -Force
+          Copy-Item $exe.FullName 'dist/CapPicker.exe' -Force
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: CapPicker-1.0.0
-          path: dist/*
-
-      - name: Publish source and builds to repository
+      - name: Clean repository and update README
         shell: powershell
         run: |
           Remove-Item -Recurse -Force '.payload'
-          Remove-Item -Recurse -Force '_restore'
-          Remove-Item -Force 'CapPicker_source.tar.xz'
+          Remove-Item -Recurse -Force '_package'
+          Remove-Item -Force 'cappicker_payload.zip'
+          @'
+          # CapPicker
+
+          **CapPicker** is a lightweight Windows screenshot, color picker, and quick annotation utility.
+
+          > 화면 캡처 · 색상 추출 · 간편 편집을 하나의 작은 Windows 도구로 제공합니다.
+
+          ## Download
+
+          - **Ready to run:** `dist/CapPicker.exe`
+          - Version: **1.0.0**
+          - Windows x64 / .NET Framework
+
+          `dist/CapPicker.exe` is the executable built locally and supplied by the project owner.
+
+          ## Highlights
+
+          - Rectangle capture (`Alt + Shift + S`)
+          - Fixed-size, window, full-screen, and last-region capture
+          - Screen color picker (`Alt + Shift + C`)
+          - Image-local color picker with pixel grid and magnification
+          - RGB copy on color selection
+          - Pen, highlighter, shapes, arrow, check, text, eraser, crop, rotation, undo/redo
+          - Paint-style Korean/IME text input
+          - Korean / English UI with instant language switching from `F1` Help
+          - Per-Monitor V2 high-DPI support
+          - Tray minimize behavior and clipboard auto-copy after capture
+
+          ## Shortcuts
+
+          | Action | Shortcut |
+          | --- | --- |
+          | Rectangle capture | `Alt + Shift + S` |
+          | Screen color picker | `Alt + Shift + C` |
+          | Help / Language | `F1` |
+          | Copy | `Ctrl + C` |
+          | Save | `Ctrl + S` |
+          | Undo | `Ctrl + Z` |
+          | Redo | `Ctrl + Y` |
+
+          ## Display scaling
+
+          CapPicker supports Windows high-DPI display scaling, including Per-Monitor V2 behavior for mixed-DPI multi-monitor environments.
+
+          ## Version
+
+          **1.0.0**
+          '@ | Set-Content -Path 'README.md' -Encoding utf8
+          Remove-Item -Force '.github/workflows/publish.yml'
+
+      - name: Publish final repository state
+        shell: powershell
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          git commit -m 'Publish CapPicker 1.0.0 source and builds'
+          git commit -m 'Publish CapPicker 1.0.0 local-built executable'
           git push
-
-# Complete payload staged; this update starts the final publish run.
