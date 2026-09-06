@@ -16,23 +16,21 @@
 - Korean / English UI with instant language switching from `F1` Help
 - Tray minimize behavior and clipboard auto-copy after capture
 
-## Screenshots
-
-Screenshots are included under `docs/screenshots/`.
-
 ## Download
 
-A ready-built executable is provided at `dist/CapPicker.exe`.
+- **Portable / ready to run:** `dist/CapPicker_1.0.0_Portable.zip`
+- **Source + local build package:** `dist/CapPicker_1.0.0_LocalBuild.zip`
 
-For a local build, download `dist/CapPicker_1.0.0_LocalBuild.zip`, extract it, and run `BUILD.cmd`.
+The portable ZIP contains `CapPicker.exe`. The local-build package contains the C# WinForms source, icon, manifest, and `BUILD.cmd`.
 
-## Build
+## Local build
 
-CapPicker is written in C# WinForms and can be built with the .NET Framework compiler already included with Windows 10/11 on most systems.
+CapPicker is written in C# WinForms and targets the Windows .NET Framework toolchain.
 
-1. Download or clone this repository.
-2. Run `BUILD.cmd`.
-3. `CapPicker.exe` is created in the same folder and launched.
+1. Download `dist/CapPicker_1.0.0_LocalBuild.zip`.
+2. Extract it to a local folder.
+3. Run `BUILD.cmd`.
+4. `CapPicker.exe` is created in the same folder and launched.
 
 If the compiler is unavailable, enable **.NET Framework 4.8 Advanced Services** in Windows Features.
 
