@@ -1,0 +1,85 @@
+name: Publish CapPicker 1.0.0
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '.payload/source/**'
+      - '.github/workflows/publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore source package
+        shell: powershell
+        run: |
+          $parts = Get-ChildItem '.payload/source/part*.b64' | Sort-Object Name
+          if ($parts.Count -ne 12) { throw "Expected 12 source payload parts, found $($parts.Count)." }
+          $b64 = ($parts | ForEach-Object { Get-Content $_.FullName -Raw }) -join ''
+          [IO.File]::WriteAllBytes('CapPicker_source.tar.xz', [Convert]::FromBase64String($b64))
+          New-Item -ItemType Directory -Force '_restore' | Out-Null
+          tar -xf 'CapPicker_source.tar.xz' -C '_restore'
+          Get-ChildItem '_restore' -Force | ForEach-Object { Copy-Item $_.FullName -Destination '.' -Recurse -Force }
+
+      - name: Build CapPicker
+        shell: powershell
+        run: |
+          $csc64 = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+          $csc32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\csc.exe"
+          if (Test-Path $csc64) { $csc = $csc64; $platform = 'x64' }
+          elseif (Test-Path $csc32) { $csc = $csc32; $platform = 'x86' }
+          else { throw 'Windows .NET Framework C# compiler not found.' }
+
+          $sources = @(
+            'AssemblyInfo.cs','L10n.cs','HelpForm.cs','Program.cs','Native.cs',
+            'CaptureService.cs','Ui.cs','SelectionOverlay.cs','WindowPicker.cs',
+            'ColorPicker.cs','Editor.cs','MainForm.cs'
+          )
+          $args = @(
+            '/nologo','/target:winexe','/optimize+','/debug-',"/platform:$platform",
+            '/out:CapPicker.exe','/win32icon:CapPicker.ico','/win32manifest:app.manifest',
+            '/reference:System.dll','/reference:System.Drawing.dll','/reference:System.Windows.Forms.dll'
+          ) + $sources
+          & $csc $args
+          if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE" }
+
+      - name: Package 1.0.0
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force 'dist' | Out-Null
+          Copy-Item 'CapPicker.exe' 'dist/CapPicker.exe' -Force
+          Compress-Archive -Path 'CapPicker.exe','README.txt' -DestinationPath 'dist/CapPicker_1.0.0_Portable.zip' -Force
+          $sourceFiles = @(
+            'WindowPicker.cs','Editor.cs','ColorPicker.cs','BUILD.cmd','SelectionOverlay.cs',
+            'L10n.cs','CapPicker.ico','app.manifest','Ui.cs','README.txt','CaptureService.cs',
+            'HelpForm.cs','Native.cs','MainForm.cs','AssemblyInfo.cs','Program.cs'
+          )
+          Compress-Archive -Path $sourceFiles -DestinationPath 'dist/CapPicker_1.0.0_LocalBuild.zip' -Force
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: CapPicker-1.0.0
+          path: dist/*
+
+      - name: Publish source and builds to repository
+        shell: powershell
+        run: |
+          Remove-Item -Recurse -Force '.payload'
+          Remove-Item -Recurse -Force '_restore'
+          Remove-Item -Force 'CapPicker_source.tar.xz'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Publish CapPicker 1.0.0 source and builds'
+          git push
