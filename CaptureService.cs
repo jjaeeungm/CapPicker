@@ -1,3 +1,4 @@
+﻿
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -103,6 +104,8 @@ namespace CapPicker
                 }
             }
 
+            // GetWindowRect에는 투명한 resize border가 포함될 수 있으므로 DWM의
+            // 실제 보이는 프레임 영역으로 결과를 잘라냅니다.
             Rectangle relative = new Rectangle(
                 visualRect.Left - windowRect.Left,
                 visualRect.Top - windowRect.Top,
@@ -141,7 +144,9 @@ namespace CapPicker
                         return visual;
                 }
             }
-            catch { }
+            catch
+            {
+            }
 
             return fallback;
         }
@@ -167,6 +172,7 @@ namespace CapPicker
             if (bmp == null || bmp.Width < 2 || bmp.Height < 2)
                 return true;
 
+            // 전체 픽셀을 훑지 않고 내부 5x5 지점만 샘플링해 비용을 제한합니다.
             int transparent = 0;
             int veryDark = 0;
             int samples = 0;
@@ -208,6 +214,8 @@ namespace CapPicker
         {
             uint ownPid = (uint)Process.GetCurrentProcess().Id;
 
+            // 먼저 실제 hit-test 결과를 사용합니다. 브라우저/IDE처럼 자식 HWND가 많은 창도
+            // GA_ROOT로 최상위 창을 얻어 사용자가 가리킨 창과 선택 테두리가 일치하게 합니다.
             Native.POINT nativePoint;
             nativePoint.X = p.X;
             nativePoint.Y = p.Y;
@@ -219,6 +227,8 @@ namespace CapPicker
                     return root;
             }
 
+            // 하이라이트처럼 CapPicker 자체의 투명/TopMost 창이 hit-test를 가릴 수 있으므로
+            // 실패 시 기존 Z-order 순회 방식으로 바로 아래의 실제 대상 창을 찾습니다.
             IntPtr hwnd = Native.GetTopWindow(IntPtr.Zero);
             while (hwnd != IntPtr.Zero)
             {
@@ -269,7 +279,9 @@ namespace CapPicker
                     }
                 }
             }
-            catch { }
+            catch
+            {
+            }
 
             if (Native.GetWindowRect(hwnd, out r))
             {
