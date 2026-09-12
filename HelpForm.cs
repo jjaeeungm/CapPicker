@@ -180,7 +180,7 @@ namespace CapPicker
 
                 AppendSection("8. 저장·인쇄·설정·트레이", new string[] {
                     "PNG는 투명 픽셀을 유지합니다. JPG 저장 시 투명 부분은 흰색으로 처리합니다.",
-                    "편집줄의 인쇄 버튼 또는 Ctrl+P로 현재 이미지를 프린터 페이지에 맞춰 가운데 인쇄합니다.",
+                    "편집줄의 인쇄 버튼 또는 Ctrl+P로 CapPicker 스타일의 큰 인쇄 미리보기를 먼저 확인할 수 있습니다. 미리보기에서 세로/가로 방향을 바꿀 수 있고, 인쇄 버튼을 누르면 Windows 인쇄 창에서 프린터 설정을 확인한 뒤 현재 이미지를 페이지에 맞춰 가운데 인쇄합니다.",
                     "상단 HEX/RGB 결과 오른쪽의 설정 아이콘에서 언어, 최소화 버튼, 닫기 버튼 동작과 성능옵션을 선택할 수 있습니다.",
                     "성능옵션 기본값은 일반(권장)이며, 저사양 PC 최적화는 컬러피커 확대창, 상태정보, 측정/미리보기의 실시간 갱신 빈도와 렌더링 부하를 낮춥니다.",
                     "기본값은 최소화=작업표시줄, 닫기=트레이입니다. Win+D는 Windows 기본 동작을 유지합니다.",
@@ -242,7 +242,7 @@ namespace CapPicker
 
                 AppendSection("8. Save, print, settings, and tray", new string[] {
                     "PNG preserves transparent pixels. Transparent areas are rendered white when saving as JPEG.",
-                    "Use the Print button on the edit row or Ctrl+P to open print preview. The image is fit and centered on the printer page, and you can print from the preview toolbar.",
+                    "Use the Print button on the edit row or Ctrl+P to open the large CapPicker-style print preview. You can switch portrait/landscape there, then choose Print to open the Windows print dialog; after confirming printer settings, the image is fit and centered on the printer page.",
                     "Use the Settings icon to the right of the top HEX/RGB result to choose language, title-bar minimize, close-button actions, and performance options.",
                     "Performance options default to Normal (Recommended); Low-spec PC optimization reduces magnifier size plus status, measurement, and preview refresh load.",
                     "Defaults are Minimize=Taskbar and Close=Tray. Win+D keeps the normal Windows behavior.",

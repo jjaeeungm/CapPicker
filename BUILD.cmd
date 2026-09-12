@@ -2,11 +2,11 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-title CapPicker 1.1.1 - Local Build
+title CapPicker 1.1.7 - Local Build
 
 echo.
 echo ========================================
-echo   CapPicker 1.1.1 - Local Build
+echo   CapPicker 1.1.7 - Local Build
 echo ========================================
 echo.
 
@@ -51,7 +51,7 @@ echo Building...
  /reference:System.dll ^
  /reference:System.Drawing.dll ^
  /reference:System.Windows.Forms.dll ^
- "AssemblyInfo.cs" "L10n.cs" "AppSettings.cs" "SettingsForm.cs" "HelpForm.cs" "Program.cs" "Native.cs" "CaptureService.cs" "Ui.cs" "SelectionOverlay.cs" "WindowPicker.cs" "ColorPicker.cs" "Editor.cs" "MainForm.cs"
+ "AssemblyInfo.cs" "L10n.cs" "AppSettings.cs" "SettingsForm.cs" "HelpForm.cs" "Program.cs" "Native.cs" "CaptureService.cs" "Ui.cs" "SelectionOverlay.cs" "WindowPicker.cs" "ColorPicker.cs" "Editor.cs" "PrintPreviewForm.cs" "MainForm.cs"
 
 if errorlevel 1 (
     echo.
