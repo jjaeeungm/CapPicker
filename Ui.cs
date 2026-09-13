@@ -159,8 +159,6 @@ internal static class UiFonts
 
         // Small bottom-right badge text (e.g. timer delay seconds).
         public string Badge { get; set; }
-        // Diagonal slash across the button (e.g. timer delay off).
-        public bool Slashed { get; set; }
 
         public FlatButton()
         {
@@ -312,16 +310,6 @@ internal static class UiFonts
                     Rectangle badgeRect = new Rectangle(0, 0, Width - 2, Height - 2);
                     TextRenderer.DrawText(e.Graphics, Badge, bf, badgeRect, fg,
                         TextFormatFlags.Bottom | TextFormatFlags.Right | TextFormatFlags.NoPadding);
-                }
-            }
-
-            if (Slashed)
-            {
-                using (Pen sp = new Pen(fg, Math.Max(2f, Height * 0.07f)))
-                {
-                    sp.StartCap = LineCap.Round;
-                    sp.EndCap = LineCap.Round;
-                    e.Graphics.DrawLine(sp, Width - 7, 7, 7, Height - 7);
                 }
             }
         }
@@ -520,12 +508,15 @@ internal static class UiFonts
                         break;
                     case AppIcon.Timer:
                         {
-                            // Clock face with hands at 12 and ~4 o'clock.
-                            int radius = Math.Max(4, (rr - l - 2) / 2);
-                            g.DrawEllipse(p, cx - radius, cy - radius, radius * 2, radius * 2);
-                            g.DrawLine(p, cx, cy, cx, cy - radius + 2);
-                            g.DrawLine(p, cx, cy, cx + radius - 4, cy + 3);
-                            g.FillEllipse(b, cx - 1, cy - 1, 3, 3);
+                            // Stopwatch: crown button, stem, round face, single hand.
+                            int radius = Math.Max(4, (rr - l - 4) / 2);
+                            int top = t + 1;
+                            g.DrawLine(p, cx - 3, top + 2, cx + 3, top + 2);
+                            g.DrawLine(p, cx, top + 2, cx, top + 4);
+                            g.DrawEllipse(p, cx - radius, cy - radius + 1, radius * 2, radius * 2);
+                            g.DrawLine(p, cx, cy + 1, cx, cy - radius + 4);
+                            g.DrawLine(p, cx, cy + 1, cx + radius - 5, cy + 4);
+                            g.FillEllipse(b, cx - 1, cy, 3, 3);
                         }
                         break;
                 }

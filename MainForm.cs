@@ -280,7 +280,7 @@ namespace CapPicker
             bar.Controls.Add(scrollButton);
 
             delayButton = MakeIconButton(AppIcon.Timer, "");
-            delayButton.Click += CycleScrollDelay;
+            delayButton.Click += ShowDelayMenu;
             bar.Controls.Add(delayButton);
             UpdateDelayButton();
 
@@ -1011,21 +1011,38 @@ namespace CapPicker
             }
         }
 
-        private void CycleScrollDelay(object sender, EventArgs e)
+        private void ShowDelayMenu(object sender, EventArgs e)
         {
-            scrollDelaySec = scrollDelaySec == 0 ? 3 : (scrollDelaySec == 3 ? 5 : 0);
-            UpdateDelayButton();
+            if (delayButton == null) return;
+            using (ContextMenuStrip menu = new ContextMenuStrip())
+            {
+                AddDelayMenuItem(menu, L10n.T("지연 없음", "No delay"), 0);
+                AddDelayMenuItem(menu, L10n.T("3초 지연", "3 second delay"), 3);
+                AddDelayMenuItem(menu, L10n.T("5초 지연", "5 second delay"), 5);
+                menu.Show(delayButton, new Point(delayButton.Width, 0));
+            }
+        }
+
+        private void AddDelayMenuItem(ContextMenuStrip menu, string text, int seconds)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem(text);
+            item.Checked = scrollDelaySec == seconds;
+            item.Click += delegate
+            {
+                scrollDelaySec = seconds;
+                UpdateDelayButton();
+            };
+            menu.Items.Add(item);
         }
 
         private void UpdateDelayButton()
         {
             if (delayButton == null) return;
-            delayButton.Badge = scrollDelaySec == 0 ? "" : scrollDelaySec.ToString();
-            delayButton.Slashed = scrollDelaySec == 0;
+            delayButton.Badge = scrollDelaySec.ToString();
             string desc = scrollDelaySec == 0
                 ? L10n.T("지연 없음", "No delay")
-                : L10n.T("지연 ", "Delay ") + scrollDelaySec + L10n.T("초", "s");
-            toolTip.SetToolTip(delayButton, L10n.T("스크롤 캡처 지연: ", "Scroll capture delay: ") + desc);
+                : scrollDelaySec + L10n.T("초 지연", "s delay");
+            toolTip.SetToolTip(delayButton, L10n.T("스크롤 캡처 지연 (클릭하여 선택)", "Scroll capture delay (click to choose)") + ": " + desc);
             delayButton.Invalidate();
         }
 

@@ -62,7 +62,9 @@ namespace CapPicker
 
             string stopReason = L10n.T("완료", "Done");
             int frames = 1;
+            int shot = 1;
             int dbgIndex = 1;
+            int smallSteps = 0;
             System.Collections.Generic.List<string> log = new System.Collections.Generic.List<string>();
             log.Add("region=" + region.Width + "x" + region.Height + " lowSpec=" + AppSettings.LowSpecOptimization);
             ClearDebugFrames();
@@ -103,6 +105,7 @@ namespace CapPicker
 
                     Bitmap frame = CaptureService.CaptureRectangle(region);
                     dbgIndex++;
+                    shot++;
                     SaveDebugFrame(frame, dbgIndex);
                     try
                     {
@@ -120,8 +123,8 @@ namespace CapPicker
                             prefix = StaticPrefix(previous, frame);
                             overlap = FindOverlap(accumulator, frame, prefix, out best, out bestH);
                         }
-                        log.Add("f" + (frames + 1) + " mode=" + mode + " equal=" + equal +
-                            " prefix=" + prefix + " overlap=" + overlap + " best=" + best.ToString("0.000") + " bestH=" + bestH);
+                        log.Add("s" + shot + " mode=" + mode + " equal=" + equal + " prefix=" + prefix +
+                            " overlap=" + overlap + " best=" + best.ToString("0.000") + " bestH=" + bestH);
                         if (equal)
                         {
                             if (mode == ScrollMode.Wheel)
@@ -146,7 +149,26 @@ namespace CapPicker
                         }
                         failStreak = 0;
 
-                        int newHeight = accumulator.Height + (frame.Height - prefix - overlap);
+                        int added = frame.Height - prefix - overlap;
+                        if (added < 64)
+                        {
+                            // Bottom-of-page steps add almost nothing twice in a
+                            // row: finish instead of risking fog seams. The first
+                            // tiny step is already genuine content worth keeping,
+                            // so only the repeat stops the loop (before append).
+                            smallSteps++;
+                            if (smallSteps >= 2)
+                            {
+                                stopReason = L10n.T("끝까지 도달", "End reached");
+                                break;
+                            }
+                        }
+                        else
+                        {
+                            smallSteps = 0;
+                        }
+
+                        int newHeight = accumulator.Height + added;
                         if (newHeight > MaxTotalHeight)
                         {
                             stopReason = L10n.T("최대 크기 도달", "Max size reached");
@@ -294,9 +316,20 @@ namespace CapPicker
                 for (int h = maxOverlap; h >= MinOverlap; h--)
                 {
                     double ratio;
-                    if (RowsMatch(pa, stride, acc.Height - h, pb, stride, frameTop, w, h, out ratio))
-                        return h;
-                    if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
+                    if (!RowsMatch(pa, stride, acc.Height - h, pb, stride, frameTop, w, h, out ratio))
+                    {
+                        if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
+                        continue;
+                    }
+                    // Small overlaps on uniform content (page bottom, solid
+                    // areas) match anywhere and mean nothing. Demand a crisp
+                    // seam: the rows just beyond it must DIFFER.
+                    if (h < 128 && !SeamIsCrisp(pa, stride, acc.Height, pb, stride, frame.Height, w, h, frameTop))
+                    {
+                        if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
+                        continue;
+                    }
+                    return h;
                 }
                 return -1;
             }
@@ -355,6 +388,18 @@ namespace CapPicker
                 try { if (da != null) prev.UnlockBits(da); } catch { }
                 try { if (db != null) frame.UnlockBits(db); } catch { }
             }
+        }
+
+        // True seam or uniform fog? Compares the accumulator rows just above
+        // the seam against the frame rows just below it. If those ALSO match,
+        // the seam sits inside uniform content and the offset is arbitrary.
+        private static bool SeamIsCrisp(int[] pa, int strideA, int accH, int[] pb, int strideB, int frameH, int w, int h, int frameTop)
+        {
+            const int probe = 64;
+            if (accH - h - probe < 0) return true;
+            if (frameTop + h + probe > frameH) return true;
+            double ratio;
+            return !RowsMatch(pa, strideA, accH - h - probe, pb, strideB, frameTop + h, w, probe, out ratio);
         }
 
         private static bool RowsMatch(int[] pa, int strideA, int startA, int[] pb, int strideB, int startB, int width, int height, out double ratio)
