@@ -1,0 +1,5 @@
+# CapPicker local artifacts (never commit)
+scroll-last.log
+scroll-dbg-*.png
+*.zip
+bin-tmp/
