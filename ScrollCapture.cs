@@ -18,7 +18,12 @@ namespace CapPicker
         private const int MaxFrames = 50;
         private const int MaxTotalHeight = 16000;
         private const int MinOverlap = 16;
-        private const double MaxOverlapRatio = 0.6;
+        // Near-full search: small wheel steps in a tall viewport leave a huge
+        // true overlap (e.g. 1500px of 1704px). Capping low breaks exactly the
+        // common case. Descending search keeps this safe: the largest match
+        // wins, so a spurious small match (blank area, sticky header) can
+        // never beat the true larger overlap found earlier.
+        private const double MaxOverlapRatio = 0.95;
         private const int StripRows = 256;
 
         private const int WHEEL_DELTA = 120;
@@ -50,8 +55,10 @@ namespace CapPicker
             Thread.Sleep(200);
 
             // Start from the top so the result always spans top to bottom.
+            // A full-page jump animates much longer than a wheel step: the
+            // first frame must be tack-sharp, otherwise no overlap ever matches.
             try { Native.SendMessage(hwnd, Native.WM_VSCROLL, new IntPtr(Native.SB_TOP), IntPtr.Zero); } catch { }
-            Thread.Sleep(settleMs);
+            Thread.Sleep(settleMs + 700);
 
             string stopReason = L10n.T("완료", "Done");
             int frames = 1;
