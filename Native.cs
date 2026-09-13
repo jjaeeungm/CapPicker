@@ -13,6 +13,7 @@ namespace CapPicker
         public const int WM_LBUTTONUP = 0x0202;
         public const int WM_MOUSEWHEEL = 0x020A;
         public const int WM_VSCROLL = 0x0115;
+        public const int SB_TOP = 6;
         public const int SB_PAGEDOWN = 3;
         public const int WH_MOUSE_LL = 14;
         public const int VK_ESCAPE = 0x1B;
@@ -144,6 +145,14 @@ namespace CapPicker
 
         [DllImport("user32.dll")]
         public static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool GetClientRect(IntPtr hwnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool ClientToScreen(IntPtr hwnd, ref POINT point);
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]

@@ -76,6 +76,10 @@ namespace CapPicker
         private FlatButton settingsButton;
         private Control captureRightAlignGap;
         private Control editRightAlignGap;
+        private Control captureTrailingGap;
+        private Control editTrailingGap;
+        private ToolbarSeparator captureSeparator;
+        private ToolbarSeparator outputSeparator;
 
         private ToolTip toolTip;
 
@@ -276,7 +280,7 @@ namespace CapPicker
             captureRightAlignGap = MakeGap(0);
             bar.Controls.Add(captureRightAlignGap);
 
-            ToolbarSeparator captureSeparator = new ToolbarSeparator();
+            captureSeparator = new ToolbarSeparator();
             captureSeparator.Margin = new Padding(18, 0, 18, 0);
             bar.Controls.Add(captureSeparator);
 
@@ -291,14 +295,8 @@ namespace CapPicker
             colorResult.Margin = new Padding(0, 0, 0, 0);
             bar.Controls.Add(colorResult);
 
-            ToolbarSeparator settingsSeparator = new ToolbarSeparator();
-            settingsSeparator.Margin = new Padding(8, 0, 8, 0);
-            bar.Controls.Add(settingsSeparator);
-
-            settingsButton = MakeIconButton(AppIcon.Settings, L10n.T("설정", "Settings"));
-            settingsButton.Margin = new Padding(0, 0, 0, 0);
-            settingsButton.Click += delegate { ShowSettings(); };
-            bar.Controls.Add(settingsButton);
+            captureTrailingGap = MakeGap(0);
+            bar.Controls.Add(captureTrailingGap);
 
             return bar;
         }
@@ -349,7 +347,7 @@ namespace CapPicker
             editRightAlignGap = MakeGap(0);
             bar.Controls.Add(editRightAlignGap);
 
-            ToolbarSeparator outputSeparator = new ToolbarSeparator();
+            outputSeparator = new ToolbarSeparator();
             outputSeparator.Margin = new Padding(8, 0, 8, 0);
             bar.Controls.Add(outputSeparator);
 
@@ -362,10 +360,18 @@ namespace CapPicker
             bar.Controls.Add(saveButton);
 
             printButton = MakeEditButton(L10n.T("인쇄", "Print"), AppIcon.Print, CalculateEditButtonWidth(L10n.T("인쇄", "Print"), 78));
-            printButton.Margin = new Padding(0, 0, 0, 0);
             printButton.Click += PrintImage;
             toolTip.SetToolTip(printButton, L10n.T("인쇄 (Ctrl+P)", "Print (Ctrl+P)"));
             bar.Controls.Add(printButton);
+
+            settingsButton = MakeEditButton(L10n.T("설정", "Settings"), AppIcon.Settings, CalculateEditButtonWidth(L10n.T("설정", "Settings"), 78));
+            settingsButton.Margin = new Padding(0, 0, 0, 0);
+            settingsButton.Click += delegate { ShowSettings(); };
+            toolTip.SetToolTip(settingsButton, L10n.T("설정", "Settings"));
+            bar.Controls.Add(settingsButton);
+
+            editTrailingGap = MakeGap(0);
+            bar.Controls.Add(editTrailingGap);
 
             return bar;
         }
@@ -483,18 +489,33 @@ namespace CapPicker
         private void AlignToolbarRightEdges()
         {
             if (captureBar == null || editBar == null || captureRightAlignGap == null || editRightAlignGap == null) return;
+            if (captureSeparator == null || outputSeparator == null) return;
+            if (captureTrailingGap == null || editTrailingGap == null) return;
 
-            // Both rows start at the same X. Put any compensation before the final action
-            // group so the group stays visually compact while the visible right edges
-            // (Settings above, Print below) land on the same vertical line.
-            captureRightAlignGap.Width = 0;
-            editRightAlignGap.Width = 0;
-            int captureWidth = MeasureToolbarWidth(captureBar);
-            int editWidth = MeasureToolbarWidth(editBar);
-            if (captureWidth < editWidth)
-                captureRightAlignGap.Width = editWidth - captureWidth;
-            else if (editWidth < captureWidth)
-                editRightAlignGap.Width = captureWidth - editWidth;
+            // Step 1: put the two separators (before Color Picker above,
+            // before Copy/Save/Print below) on the same vertical line.
+            int leftC = WidthUpTo(captureBar, captureRightAlignGap) + captureSeparator.Margin.Left;
+            int leftE = WidthUpTo(editBar, editRightAlignGap) + outputSeparator.Margin.Left;
+            captureRightAlignGap.Width = Math.Max(0, leftE - leftC);
+            editRightAlignGap.Width = Math.Max(0, leftC - leftE);
+
+            // Step 2: match the right edges with the trailing gaps so both
+            // rows keep the same overall balance.
+            int totalC = MeasureToolbarWidth(captureBar);
+            int totalE = MeasureToolbarWidth(editBar);
+            captureTrailingGap.Width = Math.Max(0, totalE - totalC);
+            editTrailingGap.Width = Math.Max(0, totalC - totalE);
+        }
+
+        private static int WidthUpTo(FlowLayoutPanel bar, Control stopBefore)
+        {
+            int width = bar.Padding.Left;
+            foreach (Control c in bar.Controls)
+            {
+                if (c == stopBefore) break;
+                width += c.Width + c.Margin.Left + c.Margin.Right;
+            }
+            return width;
         }
 
         private static int MeasureToolbarWidth(FlowLayoutPanel bar)
@@ -997,19 +1018,47 @@ namespace CapPicker
 
         private void ScrollWindowSelected(IntPtr hwnd, Rectangle r)
         {
-            lastRegion = r;
+            // Scroll the client area only: window chrome (title bar, toolbars)
+            // never moves, so matching on it would fake a full-frame overlap
+            // and stop the capture after the first scroll.
+            Rectangle region = GetScrollClientRegion(hwnd, r);
+            lastRegion = region;
             try
             {
                 // Let the highlight border leave the composited screen first.
                 Thread.Sleep(55);
-                Bitmap bmp = ScrollCapture.Capture(hwnd, r);
+                Bitmap bmp = ScrollCapture.Capture(hwnd, region);
                 DisplayCapturedBitmap(bmp);
+                SetStatusText(statusColor, ScrollCapture.LastReport);
             }
             catch (Exception ex)
             {
                 InteractionCancelled();
                 MessageBox.Show(this, L10n.T("스크롤 캡처 실패:\r\n", "Scroll capture failed:\r\n") + ex.Message, "CapPicker");
             }
+        }
+
+        private static Rectangle GetScrollClientRegion(IntPtr hwnd, Rectangle fallback)
+        {
+            try
+            {
+                Native.RECT rc;
+                if (!Native.GetClientRect(hwnd, out rc))
+                    return fallback;
+                Native.POINT pt = new Native.POINT();
+                pt.X = rc.Left;
+                pt.Y = rc.Top;
+                if (!Native.ClientToScreen(hwnd, ref pt))
+                    return fallback;
+                int width = Math.Max(0, rc.Right - rc.Left);
+                int height = Math.Max(0, rc.Bottom - rc.Top);
+                Rectangle region = new Rectangle(pt.X, pt.Y, width, height);
+                region = CaptureService.ClampToVirtualScreen(region);
+                if (region.Width < 50 || region.Height < 100)
+                    return fallback;
+                return region;
+            }
+            catch { return fallback; }
         }
 
         private void CaptureFullScreen(object sender, EventArgs e)
@@ -1337,6 +1386,7 @@ namespace CapPicker
             ApplyEditButtonLanguage(saveButton, L10n.T("저장", "Save"));
             ApplyEditButtonLanguage(printButton, L10n.T("인쇄", "Print"));
             if (printButton != null) toolTip.SetToolTip(printButton, L10n.T("인쇄 (Ctrl+P)", "Print (Ctrl+P)"));
+            ApplyEditButtonLanguage(settingsButton, L10n.T("설정", "Settings"));
             if (settingsButton != null) toolTip.SetToolTip(settingsButton, L10n.T("설정", "Settings"));
             colorResult.RefreshLanguage();
             UpdateHotkeyTooltips();

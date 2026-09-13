@@ -33,6 +33,8 @@ namespace CapPicker
         // Returns the stitched bitmap. Esc finishes early and keeps the frames
         // captured so far; only the pre-scroll window picker can cancel fully.
         // Throws on capture failures so the caller can show ex.Message.
+        // After return, LastReport describes frames, height, and stop reason.
+        public static string LastReport = "";
         public static Bitmap Capture(IntPtr hwnd, Rectangle region)
         {
             if (hwnd == IntPtr.Zero)
@@ -45,6 +47,12 @@ namespace CapPicker
             try { Native.SetForegroundWindow(hwnd); } catch { }
             Thread.Sleep(200);
 
+            // Start from the top so the result always spans top to bottom.
+            try { Native.SendMessage(hwnd, Native.WM_VSCROLL, new IntPtr(Native.SB_TOP), IntPtr.Zero); } catch { }
+            Thread.Sleep(settleMs);
+
+            string stopReason = L10n.T("완료", "Done");
+            int frames = 1;
             Bitmap first = CaptureService.CaptureRectangle(region);
             Bitmap accumulator = null;
             Bitmap previous = null;
@@ -55,11 +63,16 @@ namespace CapPicker
                 first = null;
 
                 ScrollMode mode = ScrollMode.Wheel;
+                int failStreak = 0;
 
                 for (int i = 1; i < MaxFrames; i++)
                 {
                     if (IsEscPressed() || !Native.IsWindow(hwnd))
+                    {
+                        stopReason = L10n.T("중단됨", "Stopped");
                         break;
+                    }
+                    try { Native.SetForegroundWindow(hwnd); } catch { }
                     Application.DoEvents();
 
                     SendScroll(hwnd, region, mode);
@@ -67,7 +80,10 @@ namespace CapPicker
                     Application.DoEvents();
 
                     if (IsEscPressed() || !Native.IsWindow(hwnd))
+                    {
+                        stopReason = L10n.T("중단됨", "Stopped");
                         break;
+                    }
 
                     Bitmap frame = CaptureService.CaptureRectangle(region);
                     try
@@ -81,16 +97,29 @@ namespace CapPicker
                                 mode = ScrollMode.PageDown;
                                 continue;
                             }
+                            stopReason = L10n.T("끝까지 도달", "End reached");
                             break; // No change after PageDown: reached the end.
                         }
 
                         int overlap = FindOverlap(accumulator, frame);
                         if (overlap < MinOverlap)
+                        {
+                            failStreak++;
+                            if (failStreak < 2)
+                                continue; // One transient frame (animation/loading) is tolerated.
+                            stopReason = L10n.T("이어붙이기 실패", "Stitch failed");
                             break; // Cannot stitch reliably: keep what we have.
+                        }
+                        failStreak = 0;
 
                         int newHeight = accumulator.Height + frame.Height - overlap;
                         if (newHeight > MaxTotalHeight)
+                        {
+                            stopReason = L10n.T("최대 크기 도달", "Max size reached");
                             break;
+                        }
+
+                        frames++;
 
                         Bitmap stitched = new Bitmap(accumulator.Width, newHeight, PixelFormat.Format32bppArgb);
                         using (Graphics g = Graphics.FromImage(stitched))
@@ -110,6 +139,11 @@ namespace CapPicker
 
                 Bitmap result = accumulator;
                 accumulator = null;
+                if (frames >= MaxFrames)
+                    stopReason = L10n.T("최대 장수 도달", "Max frames reached");
+                LastReport = String.Format(
+                    L10n.T("스크롤 {0}장 · {1}px · {2}", "Scroll {0} frames · {1}px · {2}"),
+                    frames, result.Height, stopReason);
                 return result;
             }
             finally
