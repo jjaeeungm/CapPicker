@@ -55,9 +55,12 @@ namespace CapPicker
 
             string stopReason = L10n.T("완료", "Done");
             int frames = 1;
+            int dbgIndex = 1;
             System.Collections.Generic.List<string> log = new System.Collections.Generic.List<string>();
             log.Add("region=" + region.Width + "x" + region.Height + " lowSpec=" + AppSettings.LowSpecOptimization);
+            ClearDebugFrames();
             Bitmap first = CaptureService.CaptureRectangle(region);
+            SaveDebugFrame(first, dbgIndex);
             Bitmap accumulator = null;
             Bitmap previous = null;
             try
@@ -92,15 +95,18 @@ namespace CapPicker
                     }
 
                     Bitmap frame = CaptureService.CaptureRectangle(region);
+                    dbgIndex++;
+                    SaveDebugFrame(frame, dbgIndex);
                     try
                     {
                         bool equal = FramesEqual(previous, frame);
                         double best = 0.0;
+                        int bestH = 0;
                         int overlap = -1;
                         if (!equal)
-                            overlap = FindOverlap(accumulator, frame, out best);
+                            overlap = FindOverlap(accumulator, frame, out best, out bestH);
                         log.Add("f" + (frames + 1) + " mode=" + mode + " equal=" + equal +
-                            " overlap=" + overlap + " best=" + best.ToString("0.000"));
+                            " overlap=" + overlap + " best=" + best.ToString("0.000") + " bestH=" + bestH);
                         if (equal)
                         {
                             if (mode == ScrollMode.Wheel)
@@ -238,9 +244,10 @@ namespace CapPicker
         // the top h rows of frame. Returns -1 when nothing reliable is found.
         // Never trusts scroll distance: purely visual, so wheel settings, DPI,
         // and per-app scroll units cannot skew the seam.
-        private static int FindOverlap(Bitmap acc, Bitmap frame, out double bestRatio)
+        private static int FindOverlap(Bitmap acc, Bitmap frame, out double bestRatio, out int bestH)
         {
             bestRatio = 0.0;
+            bestH = 0;
             if (acc == null || frame == null) return -1;
             if (acc.Width != frame.Width) return -1;
 
@@ -272,7 +279,7 @@ namespace CapPicker
                     double ratio;
                     if (RowsMatch(pa, stride, acc.Height - h, pb, stride, 0, w, h, out ratio))
                         return h;
-                    if (ratio > bestRatio) bestRatio = ratio;
+                    if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
                 }
                 return -1;
             }
@@ -308,6 +315,37 @@ namespace CapPicker
             }
             ratio = compared > 0 ? 1.0 - (double)diff / compared : 0.0;
             return compared > 0;
+        }
+
+        // Debug frames: saved per run for failure analysis (user's own screen,
+        // local disk only). Delete scroll-dbg-*.png after diagnosis.
+        private static void ClearDebugFrames()
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "CapPicker");
+                foreach (string f in System.IO.Directory.GetFiles(dir, "scroll-dbg-*.png"))
+                {
+                    try { System.IO.File.Delete(f); } catch { }
+                }
+            }
+            catch { }
+        }
+
+        private static void SaveDebugFrame(Bitmap bmp, int index)
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "CapPicker");
+                System.IO.Directory.CreateDirectory(dir);
+                bmp.Save(System.IO.Path.Combine(dir, "scroll-dbg-" + index + ".png"),
+                    System.Drawing.Imaging.ImageFormat.Png);
+            }
+            catch { }
         }
 
         private static void WriteLog(System.Collections.Generic.List<string> log)
