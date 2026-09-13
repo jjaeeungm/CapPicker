@@ -19,15 +19,21 @@ User-facing documentation lives in [README.md](README.md) / [README.txt](README.
   no focus steal beyond foreground); `WM_VSCROLL`/`SB_PAGEDOWN` fallback.
   Movement is verified visually — if the wheel moves nothing, PageDown is
   tried once before finishing.
-- Stitching never trusts scroll distance: the largest overlap (16px–60% of
-  frame height) between the accumulator tail and the new frame head is found
-  with `LockBits` integer math and 1px steps, so DPI, wheel settings, and
-  per-app scroll units cannot skew the seam.
+- Stitching never trusts scroll distance: the largest overlap (16px–95% of
+  usable frame height) between the accumulator tail and the new frame head
+  is found with `LockBits` integer math and 1px steps, so DPI, wheel
+  settings, and per-app scroll units cannot skew the seam.
 - End conditions: identical consecutive frames (0.1% tolerance for
   blinkers/carets), 50-frame cap, 16000px total height cap, closed window,
   or Esc. Esc keeps the frames captured so far.
+- Sticky headers/toolbars are detected as the static row prefix shared by
+  adjacent frames at the same position and skipped before matching, so the
+  seam never compares header-vs-content. The stitch offset compensates
+  for the trimmed prefix.
 - Memory peak is two frames plus the result (incremental stitching).
-- Vertical scrolling only; sticky headers are contained by the 60% max-overlap cap.
+- Vertical scrolling only.
+- A per-run diagnostic log (`%LocalAppData%\CapPicker\scroll-last.txt`)
+  records region, per-frame equality/overlap/best scores, and the stop reason.
 
 ## Capture engine / 캡처 엔진
 

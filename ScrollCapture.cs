@@ -110,10 +110,18 @@ namespace CapPicker
                         double best = 0.0;
                         int bestH = 0;
                         int overlap = -1;
+                        int prefix = 0;
                         if (!equal)
-                            overlap = FindOverlap(accumulator, frame, out best, out bestH);
+                        {
+                            // Sticky headers/toolbars sit at the same position in
+                            // every frame and poison the seam match (at the true
+                            // offset they compare header-vs-content). Detect the
+                            // static prefix between adjacent frames and skip it.
+                            prefix = StaticPrefix(previous, frame);
+                            overlap = FindOverlap(accumulator, frame, prefix, out best, out bestH);
+                        }
                         log.Add("f" + (frames + 1) + " mode=" + mode + " equal=" + equal +
-                            " overlap=" + overlap + " best=" + best.ToString("0.000") + " bestH=" + bestH);
+                            " prefix=" + prefix + " overlap=" + overlap + " best=" + best.ToString("0.000") + " bestH=" + bestH);
                         if (equal)
                         {
                             if (mode == ScrollMode.Wheel)
@@ -138,7 +146,7 @@ namespace CapPicker
                         }
                         failStreak = 0;
 
-                        int newHeight = accumulator.Height + frame.Height - overlap;
+                        int newHeight = accumulator.Height + (frame.Height - prefix - overlap);
                         if (newHeight > MaxTotalHeight)
                         {
                             stopReason = L10n.T("최대 크기 도달", "Max size reached");
@@ -151,7 +159,7 @@ namespace CapPicker
                         using (Graphics g = Graphics.FromImage(stitched))
                         {
                             g.DrawImageUnscaled(accumulator, 0, 0);
-                            g.DrawImageUnscaled(frame, 0, accumulator.Height - overlap);
+                            g.DrawImageUnscaled(frame, 0, accumulator.Height - overlap - prefix);
                         }
                         accumulator.Dispose();
                         accumulator = stitched;
@@ -248,17 +256,19 @@ namespace CapPicker
         }
 
         // Largest overlap h (in pixels) where the bottom h rows of acc match
-        // the top h rows of frame. Returns -1 when nothing reliable is found.
-        // Never trusts scroll distance: purely visual, so wheel settings, DPI,
-        // and per-app scroll units cannot skew the seam.
-        private static int FindOverlap(Bitmap acc, Bitmap frame, out double bestRatio, out int bestH)
+        // frame rows [frameTop, frameTop + h). Never trusts scroll distance:
+        // purely visual, so wheel settings, DPI, and per-app scroll units
+        // cannot skew the seam.
+        private static int FindOverlap(Bitmap acc, Bitmap frame, int frameTop, out double bestRatio, out int bestH)
         {
             bestRatio = 0.0;
             bestH = 0;
             if (acc == null || frame == null) return -1;
             if (acc.Width != frame.Width) return -1;
+            if (frameTop < 0) frameTop = 0;
 
-            int maxOverlap = Math.Min((int)(frame.Height * MaxOverlapRatio), acc.Height);
+            int usable = frame.Height - frameTop;
+            int maxOverlap = Math.Min((int)(usable * MaxOverlapRatio), acc.Height);
             if (maxOverlap < MinOverlap) return -1;
 
             BitmapData da = null;
@@ -284,7 +294,7 @@ namespace CapPicker
                 for (int h = maxOverlap; h >= MinOverlap; h--)
                 {
                     double ratio;
-                    if (RowsMatch(pa, stride, acc.Height - h, pb, stride, 0, w, h, out ratio))
+                    if (RowsMatch(pa, stride, acc.Height - h, pb, stride, frameTop, w, h, out ratio))
                         return h;
                     if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
                 }
@@ -294,6 +304,55 @@ namespace CapPicker
             finally
             {
                 try { if (da != null) acc.UnlockBits(da); } catch { }
+                try { if (db != null) frame.UnlockBits(db); } catch { }
+            }
+        }
+
+        // Counts static rows at the top shared by two ADJACENT frames at the
+        // same position (sticky headers, toolbars). Capped well below full
+        // height so a nearly-finished page cannot erase the match area.
+        private static int StaticPrefix(Bitmap prev, Bitmap frame)
+        {
+            if (prev == null || frame == null) return 0;
+            if (prev.Width != frame.Width || prev.Height != frame.Height) return 0;
+
+            int cap = frame.Height * 2 / 5;
+            BitmapData da = null;
+            BitmapData db = null;
+            try
+            {
+                Rectangle rc = new Rectangle(0, 0, frame.Width, frame.Height);
+                da = prev.LockBits(rc, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                db = frame.LockBits(rc, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+
+                int stride = Math.Abs(da.Stride) / 4;
+                int[] pa = new int[stride * frame.Height];
+                int[] pb = new int[stride * frame.Height];
+                Marshal.Copy(da.Scan0, pa, 0, pa.Length);
+                Marshal.Copy(db.Scan0, pb, 0, pb.Length);
+
+                int w = frame.Width;
+                int prefix = 0;
+                for (int y = 0; y < cap; y++)
+                {
+                    int ia = y * stride;
+                    int ib = y * stride;
+                    int compared = 0;
+                    int diff = 0;
+                    for (int x = 0; x < w; x += 4)
+                    {
+                        compared++;
+                        if (pa[ia + x] != pb[ib + x] && ++diff * 50 > compared)
+                            return prefix; // > ~2% differing: scrolled content.
+                    }
+                    prefix++;
+                }
+                return prefix;
+            }
+            catch { return 0; }
+            finally
+            {
+                try { if (da != null) prev.UnlockBits(da); } catch { }
                 try { if (db != null) frame.UnlockBits(db); } catch { }
             }
         }
