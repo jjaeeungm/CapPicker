@@ -72,6 +72,27 @@ internal static class AppTheme
     public static readonly Color DisabledText = Color.FromArgb(145, 145, 145);
 }
 
+internal sealed class DarkMenuColors : ProfessionalColorTable
+{
+    // Context menus in CapPicker UI tone (dark gray, no default blue theme).
+    public override Color ToolStripDropDownBackground { get { return Color.FromArgb(64, 64, 64); } }
+    public override Color MenuBorder { get { return Color.FromArgb(94, 94, 94); } }
+    public override Color MenuItemBorder { get { return Color.FromArgb(132, 170, 216); } }
+    public override Color MenuItemSelected { get { return Color.FromArgb(82, 82, 82); } }
+    public override Color MenuItemSelectedGradientBegin { get { return Color.FromArgb(82, 82, 82); } }
+    public override Color MenuItemSelectedGradientEnd { get { return Color.FromArgb(82, 82, 82); } }
+    public override Color MenuItemPressedGradientBegin { get { return Color.FromArgb(70, 70, 70); } }
+    public override Color MenuItemPressedGradientEnd { get { return Color.FromArgb(70, 70, 70); } }
+    public override Color CheckBackground { get { return Color.FromArgb(82, 82, 82); } }
+    public override Color CheckSelectedBackground { get { return Color.FromArgb(82, 82, 82); } }
+    public override Color CheckPressedBackground { get { return Color.FromArgb(70, 70, 70); } }
+    public override Color ImageMarginGradientBegin { get { return Color.FromArgb(64, 64, 64); } }
+    public override Color ImageMarginGradientMiddle { get { return Color.FromArgb(64, 64, 64); } }
+    public override Color ImageMarginGradientEnd { get { return Color.FromArgb(64, 64, 64); } }
+    public override Color SeparatorDark { get { return Color.FromArgb(94, 94, 94); } }
+    public override Color SeparatorLight { get { return Color.FromArgb(64, 64, 64); } }
+}
+
 internal static class UiFonts
 {
     // 가벼움: 툴바 수십 개가 각자 Font를 만들던 것을 공유 1개로 (MuseSpark).
@@ -510,69 +531,46 @@ internal static class UiFonts
                         break;
                     case AppIcon.Timer:
                         {
-                            // Hourglass: unmistakably a delay timer.
-                            int top = t + 1;
-                            int bottom = bb - 1;
-                            int midY = (top + bottom) / 2;
-                            g.DrawLine(p, l + 2, top, rr - 2, top);
-                            g.DrawLine(p, l + 2, bottom, rr - 2, bottom);
-                            Point[] upper = new Point[] {
-                                new Point(l + 2, top),
-                                new Point(rr - 2, top),
-                                new Point(cx, midY)
-                            };
-                            Point[] lower = new Point[] {
-                                new Point(l + 2, bottom),
-                                new Point(rr - 2, bottom),
-                                new Point(cx, midY)
-                            };
-                            g.DrawPolygon(p, upper);
-                            g.DrawPolygon(p, lower);
-                            g.FillEllipse(b, cx - 1, midY - 4, 3, 6);
+                            // Compact clock face with two hands.
+                            int radius = Math.Max(3, (rr - l - 6) / 2);
+                            g.DrawEllipse(p, cx - radius, cy - radius, radius * 2, radius * 2);
+                            g.DrawLine(p, cx, cy, cx, cy - radius + 1);
+                            g.DrawLine(p, cx, cy, cx + radius - 3, cy + 2);
+                            g.FillEllipse(b, cx - 1, cy - 1, 3, 3);
                         }
                         break;
                     case AppIcon.FlipHorizontal:
                         {
-                            // Mirrored triangles around a dotted vertical axis.
-                            Point[] leftTri = new Point[] {
-                                new Point(l + 2, cy),
-                                new Point(cx - 2, t + 2),
-                                new Point(cx - 2, bb - 2)
-                            };
-                            Point[] rightTri = new Point[] {
-                                new Point(rr - 2, cy),
-                                new Point(cx + 2, t + 2),
-                                new Point(cx + 2, bb - 2)
-                            };
-                            g.FillPolygon(b, leftTri);
-                            g.FillPolygon(b, rightTri);
+                            // Object with its mirror: filled triangle pointing
+                            // right plus a dotted mirror axis on its left.
                             using (Pen dp = new Pen(color, 1f))
                             {
                                 dp.DashStyle = DashStyle.Dot;
-                                g.DrawLine(dp, cx, t + 1, cx, bb - 1);
+                                g.DrawLine(dp, cx - 3, t + 1, cx - 3, bb - 1);
                             }
+                            Point[] tri = new Point[] {
+                                new Point(rr - 2, cy),
+                                new Point(cx + 1, t + 2),
+                                new Point(cx + 1, bb - 2)
+                            };
+                            g.FillPolygon(b, tri);
                         }
                         break;
                     case AppIcon.FlipVertical:
                         {
-                            // Mirrored triangles around a dotted horizontal axis.
-                            Point[] topTri = new Point[] {
-                                new Point(cx, t + 2),
-                                new Point(l + 2, cy - 2),
-                                new Point(rr - 2, cy - 2)
-                            };
-                            Point[] bottomTri = new Point[] {
-                                new Point(cx, bb - 2),
-                                new Point(l + 2, cy + 2),
-                                new Point(rr - 2, cy + 2)
-                            };
-                            g.FillPolygon(b, topTri);
-                            g.FillPolygon(b, bottomTri);
+                            // Object with its mirror: filled triangle pointing
+                            // down plus a dotted mirror axis above it.
                             using (Pen dp = new Pen(color, 1f))
                             {
                                 dp.DashStyle = DashStyle.Dot;
-                                g.DrawLine(dp, l + 1, cy, rr - 1, cy);
+                                g.DrawLine(dp, l + 1, cy - 3, rr - 1, cy - 3);
                             }
+                            Point[] tri = new Point[] {
+                                new Point(cx, bb - 2),
+                                new Point(l + 2, cy + 1),
+                                new Point(rr - 2, cy + 1)
+                            };
+                            g.FillPolygon(b, tri);
                         }
                         break;
                 }

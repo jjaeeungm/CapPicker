@@ -64,6 +64,7 @@ namespace CapPicker
         private FlatButton lastRegionButton;
         private FlatButton scrollButton;
         private FlatButton delayButton;
+        private ContextMenuStrip delayMenu;
         private FlatButton screenPickerButton;
         private bool scrollCaptureArmed;
         private int scrollDelaySec;
@@ -281,6 +282,10 @@ namespace CapPicker
             bar.Controls.Add(lastRegionButton);
             bar.Controls.Add(scrollButton);
 
+            ToolbarSeparator delaySeparator = new ToolbarSeparator();
+            delaySeparator.Margin = new Padding(8, 0, 8, 0);
+            bar.Controls.Add(delaySeparator);
+
             delayButton = MakeIconButton(AppIcon.Timer, "");
             delayButton.Click += ShowDelayMenu;
             bar.Controls.Add(delayButton);
@@ -381,7 +386,7 @@ namespace CapPicker
             toolTip.SetToolTip(printButton, L10n.T("인쇄 (Ctrl+P)", "Print (Ctrl+P)"));
             bar.Controls.Add(printButton);
 
-            settingsButton = MakeEditButton(L10n.T("설정", "Settings"), AppIcon.Settings, CalculateEditButtonWidth(L10n.T("설정", "Settings"), 78));
+            settingsButton = MakeIconButton(AppIcon.Settings, L10n.T("설정", "Settings"));
             settingsButton.Margin = new Padding(0, 0, 0, 0);
             settingsButton.Click += delegate { ShowSettings(); };
             toolTip.SetToolTip(settingsButton, L10n.T("설정", "Settings"));
@@ -858,6 +863,11 @@ namespace CapPicker
             if (windowPicker != null) windowPicker.Dispose();
             if (colorPicker != null) colorPicker.Dispose();
             if (canvas != null) canvas.Dispose();
+            if (delayMenu != null)
+            {
+                try { delayMenu.Dispose(); } catch { }
+                delayMenu = null;
+            }
             if (toolTip != null) toolTip.Dispose();
             if (trayIcon != null)
             {
@@ -1043,19 +1053,39 @@ namespace CapPicker
         private void ShowDelayMenu(object sender, EventArgs e)
         {
             if (delayButton == null) return;
-            // NOTE: must NOT be in a using block. ContextMenuStrip.Show is
-            // modeless; disposing here would destroy the menu instantly.
-            ContextMenuStrip menu = new ContextMenuStrip();
-            menu.Closed += delegate { try { menu.Dispose(); } catch { } };
-            AddDelayMenuItem(menu, L10n.T("지연 없음", "No delay"), 0);
-            AddDelayMenuItem(menu, L10n.T("3초 지연", "3 second delay"), 3);
-            AddDelayMenuItem(menu, L10n.T("5초 지연", "5 second delay"), 5);
-            menu.Show(delayButton, new Point(delayButton.Width, 0));
+            // The menu must stay rooted while visible: a local without any
+            // owner reference gets GC-collected mid-click (ObjectDisposed).
+            CloseDelayMenu();
+            delayMenu = new ContextMenuStrip();
+            delayMenu.Renderer = new ToolStripProfessionalRenderer(new DarkMenuColors());
+            delayMenu.BackColor = AppTheme.Toolbar;
+            delayMenu.ForeColor = AppTheme.Text;
+            delayMenu.Closed += delegate
+            {
+                ContextMenuStrip m = delayMenu;
+                delayMenu = null;
+                try { if (m != null) m.Dispose(); } catch { }
+            };
+            AddDelayMenuItem(delayMenu, L10n.T("지연 없음", "No delay"), 0);
+            AddDelayMenuItem(delayMenu, L10n.T("3초 지연", "3 second delay"), 3);
+            AddDelayMenuItem(delayMenu, L10n.T("5초 지연", "5 second delay"), 5);
+            delayMenu.Show(delayButton, new Point(delayButton.Width, 0));
+        }
+
+        private void CloseDelayMenu()
+        {
+            try
+            {
+                if (delayMenu != null) delayMenu.Close();
+            }
+            catch { }
         }
 
         private void AddDelayMenuItem(ContextMenuStrip menu, string text, int seconds)
         {
             ToolStripMenuItem item = new ToolStripMenuItem(text);
+            item.ForeColor = AppTheme.Text;
+            item.BackColor = AppTheme.Toolbar;
             item.Checked = scrollDelaySec == seconds;
             item.Click += delegate
             {
@@ -1504,7 +1534,7 @@ namespace CapPicker
             ApplyEditButtonLanguage(saveButton, L10n.T("저장", "Save"));
             ApplyEditButtonLanguage(printButton, L10n.T("인쇄", "Print"));
             if (printButton != null) toolTip.SetToolTip(printButton, L10n.T("인쇄 (Ctrl+P)", "Print (Ctrl+P)"));
-            ApplyEditButtonLanguage(settingsButton, L10n.T("설정", "Settings"));
+            if (printButton != null) toolTip.SetToolTip(printButton, L10n.T("인쇄 (Ctrl+P)", "Print (Ctrl+P)"));
             if (settingsButton != null) toolTip.SetToolTip(settingsButton, L10n.T("설정", "Settings"));
             colorResult.RefreshLanguage();
             UpdateHotkeyTooltips();
