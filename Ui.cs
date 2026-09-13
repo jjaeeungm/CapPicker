@@ -119,7 +119,8 @@ internal static class UiFonts
         Copy,
         Save,
         Print,
-        Settings
+        Settings,
+        ScrollCapture
     }
 
     internal sealed class FlatButton : Control
@@ -345,6 +346,13 @@ internal static class UiFonts
                         g.DrawArc(p, l + 2, t + 2, rr - l - 4, bb - t - 4, 35, 290);
                         g.DrawLine(p, l + 2, cy - 3, l + 2, cy + 3);
                         g.DrawLine(p, l + 2, cy + 3, l + 7, cy + 3);
+                        break;
+                    case AppIcon.ScrollCapture:
+                        // Small window with a down chevron beneath: scroll capture.
+                        g.DrawRectangle(p, l + 1, t, rr - l - 2, bb - t - 8);
+                        g.DrawLine(p, l + 1, t + 4, rr - 1, t + 4);
+                        g.DrawLine(p, cx - 4, bb - 5, cx, bb - 1);
+                        g.DrawLine(p, cx, bb - 1, cx + 4, bb - 5);
                         break;
                     case AppIcon.Eyedropper:
                         g.DrawLine(p, l + 4, bb - 2, rr - 3, t + 3);

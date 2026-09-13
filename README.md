@@ -27,9 +27,10 @@ CapPicker는 작고 빠른 Windows 캡처·컬러피커·빠른 편집 도구입
 ### Capture / 캡처
 
 - Rectangle (`Alt + Shift + S`), fixed-size, window, full-screen, last-region capture
+- Scroll capture: pick a window, auto-scroll it, frames stitched by visual overlap
 - Window capture renders directly via PrintWindow first, with visible-screen fallback for unsupported/GPU windows
 
-- 사각형(`Alt + Shift + S`), 크기지정, 윈도우창, 전체화면, 지난영역 캡처
+- 사각형(`Alt + Shift + S`), 크기지정, 윈도우창, 전체화면, 지난영역, 스크롤 캡처
 
 ### Color Picker / 컬러피커
 
@@ -114,7 +115,7 @@ paths) live in [TECHNICAL_NOTES.md](TECHNICAL_NOTES.md).
 
 ## Version / 버전
 
-- Product: **2.0.0**, Assembly/File: **2.0.0.0**
+- Product: **2.1.0**, Assembly/File: **2.1.0.0**
 
 ## License / 라이선스
 

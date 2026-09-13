@@ -1,15 +1,33 @@
 # CapPicker — Technical Notes / 기술 노트
 
-Developer-oriented implementation notes for CapPicker 2.0.0.
+Developer-oriented implementation notes for CapPicker 2.1.0.
 User-facing documentation lives in [README.md](README.md) / [README.txt](README.txt).
 
 ## Build / 빌드
 
 - Language: C# WinForms on .NET Framework 4.x. No NuGet packages, no `.csproj`.
-- `BUILD.cmd` compiles 15 `.cs` files directly with `csc.exe`
+- `BUILD.cmd` compiles 16 `.cs` files directly with `csc.exe`
   (`/target:winexe /optimize+`, x64 preferred, x86 fallback).
 - Output: single `CapPicker.exe` (~185 KB). No installer.
 - Build with zero warnings (csc `/nologo`, warnings treated as pre-existing only).
+
+## Scroll capture (v2.1) / 스크롤 캡처
+
+- Flow: Scroll button (right of Last Region) → pick a window → auto-scroll →
+  visual overlap stitching → existing Editor pipeline. No new global hotkey.
+- Scroll actuation: `WM_MOUSEWHEEL` via `SendMessage` first (no cursor move,
+  no focus steal beyond foreground); `WM_VSCROLL`/`SB_PAGEDOWN` fallback.
+  Movement is verified visually — if the wheel moves nothing, PageDown is
+  tried once before finishing.
+- Stitching never trusts scroll distance: the largest overlap (16px–60% of
+  frame height) between the accumulator tail and the new frame head is found
+  with `LockBits` integer math and 1px steps, so DPI, wheel settings, and
+  per-app scroll units cannot skew the seam.
+- End conditions: identical consecutive frames (0.1% tolerance for
+  blinkers/carets), 50-frame cap, 16000px total height cap, closed window,
+  or Esc. Esc keeps the frames captured so far.
+- Memory peak is two frames plus the result (incremental stitching).
+- Vertical scrolling only; sticky headers are contained by the 60% max-overlap cap.
 
 ## Capture engine / 캡처 엔진
 

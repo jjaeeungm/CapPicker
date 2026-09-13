@@ -62,7 +62,9 @@ namespace CapPicker
         private FlatButton windowCaptureButton;
         private FlatButton fullScreenButton;
         private FlatButton lastRegionButton;
+        private FlatButton scrollButton;
         private FlatButton screenPickerButton;
+        private bool scrollCaptureArmed;
 
         private FlatButton undoButton;
         private FlatButton redoButton;
@@ -263,11 +265,13 @@ namespace CapPicker
             windowCaptureButton = MakeCaptureButton(L10n.T("윈도우창", "Window"), AppIcon.WindowCapture, buttonWidth, StartWindowCapture);
             fullScreenButton = MakeCaptureButton(L10n.T("전체화면", "Full Screen"), AppIcon.FullScreen, buttonWidth, CaptureFullScreen);
             lastRegionButton = MakeCaptureButton(L10n.T("지난영역", "Last Region"), AppIcon.History, buttonWidth, CaptureLastRegion);
+            scrollButton = MakeCaptureButton(L10n.T("스크롤", "Scroll"), AppIcon.ScrollCapture, buttonWidth, StartScrollCapture);
             bar.Controls.Add(rectangleCaptureButton);
             bar.Controls.Add(fixedCaptureButton);
             bar.Controls.Add(windowCaptureButton);
             bar.Controls.Add(fullScreenButton);
             bar.Controls.Add(lastRegionButton);
+            bar.Controls.Add(scrollButton);
 
             captureRightAlignGap = MakeGap(0);
             bar.Controls.Add(captureRightAlignGap);
@@ -395,6 +399,7 @@ namespace CapPicker
                 L10n.T("윈도우창", "Window"),
                 L10n.T("전체화면", "Full Screen"),
                 L10n.T("지난영역", "Last Region"),
+                L10n.T("스크롤", "Scroll"),
                 L10n.T("컬러피커", "Color Picker")
             };
 
@@ -880,6 +885,7 @@ namespace CapPicker
         private void InteractionCancelled()
         {
             busy = false;
+            scrollCaptureArmed = false;
             colorResult.Note = "";
             if (!interactionWasTray)
             {
@@ -956,6 +962,12 @@ namespace CapPicker
 
         private void WindowSelected(IntPtr hwnd, Rectangle r)
         {
+            if (scrollCaptureArmed)
+            {
+                scrollCaptureArmed = false;
+                ScrollWindowSelected(hwnd, r);
+                return;
+            }
             lastRegion = r;
             try
             {
@@ -968,6 +980,35 @@ namespace CapPicker
             {
                 InteractionCancelled();
                 MessageBox.Show(this, L10n.T("윈도우 캡처 실패:\r\n", "Window capture failed:\r\n") + ex.Message, "CapPicker");
+            }
+        }
+
+        private void StartScrollCapture(object sender, EventArgs e)
+        {
+            if (!BeginInteraction()) return;
+            scrollCaptureArmed = true;
+            if (!windowPicker.Start())
+            {
+                scrollCaptureArmed = false;
+                InteractionCancelled();
+                MessageBox.Show(this, L10n.T("윈도우 선택을 시작하지 못했습니다.", "Could not start window selection."), "CapPicker");
+            }
+        }
+
+        private void ScrollWindowSelected(IntPtr hwnd, Rectangle r)
+        {
+            lastRegion = r;
+            try
+            {
+                // Let the highlight border leave the composited screen first.
+                Thread.Sleep(55);
+                Bitmap bmp = ScrollCapture.Capture(hwnd, r);
+                DisplayCapturedBitmap(bmp);
+            }
+            catch (Exception ex)
+            {
+                InteractionCancelled();
+                MessageBox.Show(this, L10n.T("스크롤 캡처 실패:\r\n", "Scroll capture failed:\r\n") + ex.Message, "CapPicker");
             }
         }
 
@@ -1271,6 +1312,7 @@ namespace CapPicker
             ApplyCaptureButtonLanguage(windowCaptureButton, L10n.T("윈도우창", "Window"), captureWidth);
             ApplyCaptureButtonLanguage(fullScreenButton, L10n.T("전체화면", "Full Screen"), captureWidth);
             ApplyCaptureButtonLanguage(lastRegionButton, L10n.T("지난영역", "Last Region"), captureWidth);
+            ApplyCaptureButtonLanguage(scrollButton, L10n.T("스크롤", "Scroll"), captureWidth);
             ApplyCaptureButtonLanguage(screenPickerButton, L10n.T("컬러피커", "Color Picker"), captureWidth);
 
             SetToolLanguage(EditorTool.Pen, L10n.T("일반펜", "Pen"));

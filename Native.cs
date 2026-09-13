@@ -12,6 +12,8 @@ namespace CapPicker
         public const int WM_LBUTTONDOWN = 0x0201;
         public const int WM_LBUTTONUP = 0x0202;
         public const int WM_MOUSEWHEEL = 0x020A;
+        public const int WM_VSCROLL = 0x0115;
+        public const int SB_PAGEDOWN = 3;
         public const int WH_MOUSE_LL = 14;
         public const int VK_ESCAPE = 0x1B;
 
@@ -145,7 +147,15 @@ namespace CapPicker
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool IsWindow(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool IsWindowVisible(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool SetForegroundWindow(IntPtr hwnd);
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]

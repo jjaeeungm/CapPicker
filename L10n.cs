@@ -13,7 +13,7 @@ namespace CapPicker
 
     internal static class L10n
     {
-        public const string Version = "2.0.0";
+        public const string Version = "2.1.0";
 
         public static event EventHandler LanguageChanged;
         private static UiLanguageMode languageMode = LoadLanguageMode();
