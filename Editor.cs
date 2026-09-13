@@ -2207,6 +2207,32 @@ namespace CapPicker
             if (ZoomChanged != null) ZoomChanged(this, EventArgs.Empty);
         }
 
+        public void FlipHorizontal()
+        {
+            if (textEditing) CommitText();
+            SaveUndo();
+            redo.Clear();
+
+            current.RotateFlip(RotateFlipType.RotateNoneFlipX);
+            clean.RotateFlip(RotateFlipType.RotateNoneFlipX);
+
+            Invalidate();
+            RaiseHistoryChanged();
+        }
+
+        public void FlipVertical()
+        {
+            if (textEditing) CommitText();
+            SaveUndo();
+            redo.Clear();
+
+            current.RotateFlip(RotateFlipType.RotateNoneFlipY);
+            clean.RotateFlip(RotateFlipType.RotateNoneFlipY);
+
+            Invalidate();
+            RaiseHistoryChanged();
+        }
+
         public void Undo()
         {
             if (textEditing) CommitText();

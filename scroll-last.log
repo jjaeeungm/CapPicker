@@ -1,0 +1,16 @@
+region=2880x1704 lowSpec=False
+s2 mode=Wheel equal=False prefix=242 overlap=-1 best=0.917 bestH=1063
+s3 mode=Wheel equal=False prefix=242 overlap=-1 best=0.917 bestH=662
+s4 mode=Wheel equal=False prefix=242 overlap=262 best=0.917 bestH=263
+s5 mode=Wheel equal=False prefix=242 overlap=1066 best=0.917 bestH=1069
+s6 mode=Wheel equal=False prefix=247 overlap=1060 best=0.917 bestH=1072
+s7 mode=Wheel equal=False prefix=243 overlap=-1 best=0.917 bestH=404
+s8 mode=Wheel equal=False prefix=243 overlap=667 best=0.917 bestH=739
+s9 mode=Wheel equal=False prefix=338 overlap=966 best=0.917 bestH=977
+s10 mode=Wheel equal=False prefix=338 overlap=966 best=0.916 bestH=1238
+s11 mode=Wheel equal=False prefix=338 overlap=971 best=0.917 bestH=1021
+s12 mode=Wheel equal=False prefix=352 overlap=962 best=0.917 bestH=965
+s13 mode=Wheel equal=False prefix=352 overlap=1197 best=0.917 bestH=1198
+s14 mode=Wheel equal=True prefix=0 overlap=-1 best=0.000 bestH=0
+s15 mode=PageDown equal=True prefix=0 overlap=-1 best=0.000 bestH=0
+result frames=10 height=6231 stop=끝까지 도달

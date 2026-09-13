@@ -22,8 +22,9 @@ namespace CapPicker
         // true overlap (e.g. 1500px of 1704px). Capping low breaks exactly the
         // common case. Descending search keeps this safe: the largest match
         // wins, so a spurious small match (blank area, sticky header) can
-        // never beat the true larger overlap found earlier.
-        private const double MaxOverlapRatio = 0.95;
+        // never beat the true larger overlap found earlier. SeamContinues
+        // below additionally rejects alias matches inside repetition.
+        private const double MaxOverlapRatio = 1.0;
         private const int StripRows = 256;
 
         private const int WHEEL_DELTA = 120;
@@ -150,6 +151,12 @@ namespace CapPicker
                         failStreak = 0;
 
                         int added = frame.Height - prefix - overlap;
+                        if (added <= 0)
+                        {
+                            // Fully static frame: nothing new to append.
+                            stopReason = L10n.T("끝까지 도달", "End reached");
+                            break;
+                        }
                         if (added < 64)
                         {
                             // Bottom-of-page steps add almost nothing twice in a
@@ -321,10 +328,12 @@ namespace CapPicker
                         if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
                         continue;
                     }
-                    // Small overlaps on uniform content (page bottom, solid
-                    // areas) match anywhere and mean nothing. Demand a crisp
-                    // seam: the rows just beyond it must DIFFER.
-                    if (h < 128 && !SeamIsCrisp(pa, stride, acc.Height, pb, stride, frame.Height, w, h, frameTop))
+                    // Periodic content (file lists, tables) also matches at
+                    // alias offsets repeating every row pitch. Demand that the
+                    // rows just beyond the seam DIFFER: a true seam always
+                    // continues into new content, while an alias sits inside
+                    // repetition.
+                    if (!SeamContinues(pa, stride, acc.Height, pb, stride, frame.Height, w, h, frameTop))
                     {
                         if (ratio > bestRatio) { bestRatio = ratio; bestH = h; }
                         continue;
@@ -390,12 +399,13 @@ namespace CapPicker
             }
         }
 
-        // True seam or uniform fog? Compares the accumulator rows just above
-        // the seam against the frame rows just below it. If those ALSO match,
-        // the seam sits inside uniform content and the offset is arbitrary.
-        private static bool SeamIsCrisp(int[] pa, int strideA, int accH, int[] pb, int strideB, int frameH, int w, int h, int frameTop)
+        // True seam or repetition fog? Compares the accumulator rows just
+        // above the seam against the frame rows just below it. If those ALSO
+        // match, the seam sits inside repeating content and the offset is
+        // arbitrary. Only a seam that continues into different content counts.
+        private static bool SeamContinues(int[] pa, int strideA, int accH, int[] pb, int strideB, int frameH, int w, int h, int frameTop)
         {
-            const int probe = 64;
+            const int probe = 128;
             if (accH - h - probe < 0) return true;
             if (frameTop + h + probe > frameH) return true;
             double ratio;

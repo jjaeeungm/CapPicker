@@ -121,7 +121,9 @@ internal static class UiFonts
         Print,
         Settings,
         ScrollCapture,
-        Timer
+        Timer,
+        FlipHorizontal,
+        FlipVertical
     }
 
     internal sealed class FlatButton : Control
@@ -508,15 +510,69 @@ internal static class UiFonts
                         break;
                     case AppIcon.Timer:
                         {
-                            // Stopwatch: crown button, stem, round face, single hand.
-                            int radius = Math.Max(4, (rr - l - 4) / 2);
+                            // Hourglass: unmistakably a delay timer.
                             int top = t + 1;
-                            g.DrawLine(p, cx - 3, top + 2, cx + 3, top + 2);
-                            g.DrawLine(p, cx, top + 2, cx, top + 4);
-                            g.DrawEllipse(p, cx - radius, cy - radius + 1, radius * 2, radius * 2);
-                            g.DrawLine(p, cx, cy + 1, cx, cy - radius + 4);
-                            g.DrawLine(p, cx, cy + 1, cx + radius - 5, cy + 4);
-                            g.FillEllipse(b, cx - 1, cy, 3, 3);
+                            int bottom = bb - 1;
+                            int midY = (top + bottom) / 2;
+                            g.DrawLine(p, l + 2, top, rr - 2, top);
+                            g.DrawLine(p, l + 2, bottom, rr - 2, bottom);
+                            Point[] upper = new Point[] {
+                                new Point(l + 2, top),
+                                new Point(rr - 2, top),
+                                new Point(cx, midY)
+                            };
+                            Point[] lower = new Point[] {
+                                new Point(l + 2, bottom),
+                                new Point(rr - 2, bottom),
+                                new Point(cx, midY)
+                            };
+                            g.DrawPolygon(p, upper);
+                            g.DrawPolygon(p, lower);
+                            g.FillEllipse(b, cx - 1, midY - 4, 3, 6);
+                        }
+                        break;
+                    case AppIcon.FlipHorizontal:
+                        {
+                            // Mirrored triangles around a dotted vertical axis.
+                            Point[] leftTri = new Point[] {
+                                new Point(l + 2, cy),
+                                new Point(cx - 2, t + 2),
+                                new Point(cx - 2, bb - 2)
+                            };
+                            Point[] rightTri = new Point[] {
+                                new Point(rr - 2, cy),
+                                new Point(cx + 2, t + 2),
+                                new Point(cx + 2, bb - 2)
+                            };
+                            g.FillPolygon(b, leftTri);
+                            g.FillPolygon(b, rightTri);
+                            using (Pen dp = new Pen(color, 1f))
+                            {
+                                dp.DashStyle = DashStyle.Dot;
+                                g.DrawLine(dp, cx, t + 1, cx, bb - 1);
+                            }
+                        }
+                        break;
+                    case AppIcon.FlipVertical:
+                        {
+                            // Mirrored triangles around a dotted horizontal axis.
+                            Point[] topTri = new Point[] {
+                                new Point(cx, t + 2),
+                                new Point(l + 2, cy - 2),
+                                new Point(rr - 2, cy - 2)
+                            };
+                            Point[] bottomTri = new Point[] {
+                                new Point(cx, bb - 2),
+                                new Point(l + 2, cy + 2),
+                                new Point(rr - 2, cy + 2)
+                            };
+                            g.FillPolygon(b, topTri);
+                            g.FillPolygon(b, bottomTri);
+                            using (Pen dp = new Pen(color, 1f))
+                            {
+                                dp.DashStyle = DashStyle.Dot;
+                                g.DrawLine(dp, l + 1, cy, rr - 1, cy);
+                            }
                         }
                         break;
                 }

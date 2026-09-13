@@ -72,6 +72,8 @@ namespace CapPicker
         private FlatButton redoButton;
         private FlatButton rotateLeftButton;
         private FlatButton rotateRightButton;
+        private FlatButton flipHButton;
+        private FlatButton flipVButton;
         private FlatButton copyButton;
         private FlatButton saveButton;
         private FlatButton printButton;
@@ -335,6 +337,14 @@ namespace CapPicker
             rotateRightButton.Click += delegate { if (canvas != null) canvas.RotateRight(); };
             bar.Controls.Add(rotateRightButton);
 
+            flipHButton = MakeIconButton(AppIcon.FlipHorizontal, L10n.T("좌우 반전", "Flip horizontal"));
+            flipHButton.Click += delegate { if (canvas != null) canvas.FlipHorizontal(); };
+            bar.Controls.Add(flipHButton);
+
+            flipVButton = MakeIconButton(AppIcon.FlipVertical, L10n.T("상하 반전", "Flip vertical"));
+            flipVButton.Click += delegate { if (canvas != null) canvas.FlipVertical(); };
+            bar.Controls.Add(flipVButton);
+
             ToolbarSeparator historySeparator = new ToolbarSeparator();
             historySeparator.Margin = new Padding(12, 0, 12, 0);
             bar.Controls.Add(historySeparator);
@@ -499,19 +509,27 @@ namespace CapPicker
             if (captureSeparator == null || outputSeparator == null) return;
             if (captureTrailingGap == null || editTrailingGap == null) return;
 
-            // Step 1: put the two separators (before Color Picker above,
-            // before Copy/Save/Print below) on the same vertical line.
-            int leftC = WidthUpTo(captureBar, captureRightAlignGap) + captureSeparator.Margin.Left;
-            int leftE = WidthUpTo(editBar, editRightAlignGap) + outputSeparator.Margin.Left;
+            // Step 1: the Color Picker start (above) and the Copy start (below)
+            // share one vertical line.
+            int leftC = WidthUpTo(captureBar, screenPickerButton);
+            int leftE = WidthUpTo(editBar, copyButton);
             captureRightAlignGap.Width = Math.Max(0, leftE - leftC);
             editRightAlignGap.Width = Math.Max(0, leftC - leftE);
 
-            // Step 2: match the right edges with the trailing gaps so both
-            // rows keep the same overall balance.
-            int totalC = MeasureToolbarWidth(captureBar);
-            int totalE = MeasureToolbarWidth(editBar);
-            captureTrailingGap.Width = Math.Max(0, totalE - totalC);
-            editTrailingGap.Width = Math.Max(0, totalC - totalE);
+            // Step 2: the HEX/RGB chip end (above) and the Settings end (below)
+            // share one vertical line. The chip is flexible: it absorbs a
+            // positive difference so the match is pixel-exact; otherwise the
+            // trailing gaps compensate as before.
+            int rightC = WidthThrough(captureBar, colorResult);
+            int rightE = WidthThrough(editBar, settingsButton);
+            int chipGap = rightE - rightC;
+            if (chipGap > 0)
+            {
+                colorResult.Width = 180 + chipGap;
+                rightC = WidthThrough(captureBar, colorResult);
+            }
+            captureTrailingGap.Width = Math.Max(0, rightE - rightC);
+            editTrailingGap.Width = Math.Max(0, rightC - rightE);
         }
 
         private static int WidthUpTo(FlowLayoutPanel bar, Control stopBefore)
@@ -521,6 +539,17 @@ namespace CapPicker
             {
                 if (c == stopBefore) break;
                 width += c.Width + c.Margin.Left + c.Margin.Right;
+            }
+            return width;
+        }
+
+        private static int WidthThrough(FlowLayoutPanel bar, Control stopAfter)
+        {
+            int width = bar.Padding.Left;
+            foreach (Control c in bar.Controls)
+            {
+                width += c.Width + c.Margin.Left + c.Margin.Right;
+                if (c == stopAfter) break;
             }
             return width;
         }
@@ -1014,13 +1043,14 @@ namespace CapPicker
         private void ShowDelayMenu(object sender, EventArgs e)
         {
             if (delayButton == null) return;
-            using (ContextMenuStrip menu = new ContextMenuStrip())
-            {
-                AddDelayMenuItem(menu, L10n.T("지연 없음", "No delay"), 0);
-                AddDelayMenuItem(menu, L10n.T("3초 지연", "3 second delay"), 3);
-                AddDelayMenuItem(menu, L10n.T("5초 지연", "5 second delay"), 5);
-                menu.Show(delayButton, new Point(delayButton.Width, 0));
-            }
+            // NOTE: must NOT be in a using block. ContextMenuStrip.Show is
+            // modeless; disposing here would destroy the menu instantly.
+            ContextMenuStrip menu = new ContextMenuStrip();
+            menu.Closed += delegate { try { menu.Dispose(); } catch { } };
+            AddDelayMenuItem(menu, L10n.T("지연 없음", "No delay"), 0);
+            AddDelayMenuItem(menu, L10n.T("3초 지연", "3 second delay"), 3);
+            AddDelayMenuItem(menu, L10n.T("5초 지연", "5 second delay"), 5);
+            menu.Show(delayButton, new Point(delayButton.Width, 0));
         }
 
         private void AddDelayMenuItem(ContextMenuStrip menu, string text, int seconds)
@@ -1465,6 +1495,8 @@ namespace CapPicker
 
             toolTip.SetToolTip(rotateLeftButton, L10n.T("왼쪽 회전", "Rotate left"));
             toolTip.SetToolTip(rotateRightButton, L10n.T("오른쪽 회전", "Rotate right"));
+            toolTip.SetToolTip(flipHButton, L10n.T("좌우 반전", "Flip horizontal"));
+            toolTip.SetToolTip(flipVButton, L10n.T("상하 반전", "Flip vertical"));
             toolTip.SetToolTip(undoButton, L10n.T("되돌리기 (Ctrl+Z)", "Undo (Ctrl+Z)"));
             toolTip.SetToolTip(redoButton, L10n.T("다시 실행 (Ctrl+Y)", "Redo (Ctrl+Y)"));
 
