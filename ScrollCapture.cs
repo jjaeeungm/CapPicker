@@ -34,7 +34,9 @@ namespace CapPicker
         // captured so far; only the pre-scroll window picker can cancel fully.
         // Throws on capture failures so the caller can show ex.Message.
         // After return, LastReport describes frames, height, and stop reason.
+        // A per-frame diagnostic log is left at %LocalAppData%\CapPicker\scroll-last.txt.
         public static string LastReport = "";
+        public static string LastLogPath = "";
         public static Bitmap Capture(IntPtr hwnd, Rectangle region)
         {
             if (hwnd == IntPtr.Zero)
@@ -53,6 +55,8 @@ namespace CapPicker
 
             string stopReason = L10n.T("완료", "Done");
             int frames = 1;
+            System.Collections.Generic.List<string> log = new System.Collections.Generic.List<string>();
+            log.Add("region=" + region.Width + "x" + region.Height + " lowSpec=" + AppSettings.LowSpecOptimization);
             Bitmap first = CaptureService.CaptureRectangle(region);
             Bitmap accumulator = null;
             Bitmap previous = null;
@@ -90,7 +94,14 @@ namespace CapPicker
                     Bitmap frame = CaptureService.CaptureRectangle(region);
                     try
                     {
-                        if (FramesEqual(previous, frame))
+                        bool equal = FramesEqual(previous, frame);
+                        double best = 0.0;
+                        int overlap = -1;
+                        if (!equal)
+                            overlap = FindOverlap(accumulator, frame, out best);
+                        log.Add("f" + (frames + 1) + " mode=" + mode + " equal=" + equal +
+                            " overlap=" + overlap + " best=" + best.ToString("0.000"));
+                        if (equal)
                         {
                             if (mode == ScrollMode.Wheel)
                             {
@@ -103,7 +114,6 @@ namespace CapPicker
                             break; // No change after PageDown: reached the end.
                         }
 
-                        int overlap = FindOverlap(accumulator, frame);
                         if (overlap < MinOverlap)
                         {
                             failStreak++;
@@ -147,6 +157,8 @@ namespace CapPicker
                 LastReport = String.Format(
                     L10n.T("스크롤 {0}장 · {1}px · {2}", "Scroll {0} frames · {1}px · {2}"),
                     frames, result.Height, stopReason);
+                log.Add("result frames=" + frames + " height=" + result.Height + " stop=" + stopReason);
+                WriteLog(log);
                 return result;
             }
             finally
@@ -226,8 +238,9 @@ namespace CapPicker
         // the top h rows of frame. Returns -1 when nothing reliable is found.
         // Never trusts scroll distance: purely visual, so wheel settings, DPI,
         // and per-app scroll units cannot skew the seam.
-        private static int FindOverlap(Bitmap acc, Bitmap frame)
+        private static int FindOverlap(Bitmap acc, Bitmap frame, out double bestRatio)
         {
+            bestRatio = 0.0;
             if (acc == null || frame == null) return -1;
             if (acc.Width != frame.Width) return -1;
 
@@ -256,8 +269,10 @@ namespace CapPicker
                 // exit on the first rows, keeping the scan cheap.
                 for (int h = maxOverlap; h >= MinOverlap; h--)
                 {
-                    if (RowsMatch(pa, stride, acc.Height - h, pb, stride, 0, w, h))
+                    double ratio;
+                    if (RowsMatch(pa, stride, acc.Height - h, pb, stride, 0, w, h, out ratio))
                         return h;
+                    if (ratio > bestRatio) bestRatio = ratio;
                 }
                 return -1;
             }
@@ -269,7 +284,7 @@ namespace CapPicker
             }
         }
 
-        private static bool RowsMatch(int[] pa, int strideA, int startA, int[] pb, int strideB, int startB, int width, int height)
+        private static bool RowsMatch(int[] pa, int strideA, int startA, int[] pb, int strideB, int startB, int width, int height, out double ratio)
         {
             // Compare a bounded strip with early exit: full-height comparison
             // on every candidate would dominate the scroll settle time.
@@ -285,10 +300,29 @@ namespace CapPicker
                 {
                     compared++;
                     if (pa[ia + x] != pb[ib + x] && ++diff * 12 > compared)
+                    {
+                        ratio = 1.0 - (double)diff / Math.Max(1, compared);
                         return false; // > ~8% differing pixels.
+                    }
                 }
             }
+            ratio = compared > 0 ? 1.0 - (double)diff / compared : 0.0;
             return compared > 0;
+        }
+
+        private static void WriteLog(System.Collections.Generic.List<string> log)
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "CapPicker");
+                System.IO.Directory.CreateDirectory(dir);
+                string path = System.IO.Path.Combine(dir, "scroll-last.txt");
+                LastLogPath = path;
+                System.IO.File.WriteAllLines(path, log.ToArray());
+            }
+            catch { }
         }
     }
 }
