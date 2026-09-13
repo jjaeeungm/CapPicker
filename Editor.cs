@@ -659,6 +659,10 @@ namespace CapPicker
 
         private readonly Stack<EditorState> undo = new Stack<EditorState>();
         private readonly Stack<EditorState> redo = new Stack<EditorState>();
+        // clean changes far less often than current. Reuse its immutable PNG bytes
+        // across history states so ordinary pen/highlighter/shape clicks do not
+        // recompress the same large base image on every MouseDown.
+        private byte[] cachedCleanPng;
 
         private EditorTool tool = EditorTool.None;
         private Color drawColor = Color.FromArgb(220, 50, 47);
@@ -674,13 +678,13 @@ namespace CapPicker
         // The measured size remains in the status bar after mouse-up until another
         // measurement starts or an editing tool is selected.
         private bool measuringDrag;
+        private bool measurePending;
         private Size measuredDragSize = Size.Empty;
         private int lastPointerInfoTick = Int32.MinValue;
-        private int lastPreviewInvalidateTick = Int32.MinValue;
+        // Pointer/status text can be sampled more slowly without affecting the visible
+        // editing cursor. The cursor/preview itself is never frame-throttled.
         private const int NormalPointerInfoInterval = 16;
         private const int LowSpecPointerInfoInterval = 80;
-        private const int NormalPreviewInterval = 16;
-        private const int LowSpecPreviewInterval = 50;
         private readonly List<Point> strokePoints = new List<Point>();
         private Point start;
         private Point last;
@@ -768,6 +772,7 @@ namespace CapPicker
             {
                 if (textEditing) CommitText();
                 tool = value;
+                measurePending = false;
                 measuringDrag = false;
                 measuredDragSize = Size.Empty;
                 if (tool == EditorTool.Text) Cursor = Cursors.IBeam;
@@ -923,7 +928,11 @@ namespace CapPicker
             DrawCheckerboard(e.Graphics, imageBounds);
 
             GraphicsState clipped = e.Graphics.Save();
-            e.Graphics.SetClip(imageBounds);
+            // Preserve the WM_PAINT dirty region. SetClip(Rectangle) replaces the existing
+            // clip and makes even a tiny cursor invalidation repaint the whole bitmap.
+            // Intersect keeps Windows' dirty rectangle, which is essential for a responsive
+            // custom thickness cursor on large captures.
+            e.Graphics.SetClip(imageBounds, CombineMode.Intersect);
             e.Graphics.DrawImageUnscaled(current, 0, 0);
 
             if (tool == EditorTool.Emoji && pointerInside)
@@ -1315,11 +1324,12 @@ namespace CapPicker
             if (tool == EditorTool.None)
             {
                 if (!imageBounds.Contains(p)) return;
+                // A plain click must stay cheap. Arm the ruler here and only turn it
+                // into a measurement after a real drag begins.
                 start = now = p;
-                measuringDrag = true;
-                measuredDragSize = Size.Empty;
+                measurePending = true;
+                measuringDrag = false;
                 RaisePointerInfo(p, true);
-                RequestPreviewInvalidate(true);
                 return;
             }
 
@@ -1382,32 +1392,69 @@ namespace CapPicker
             }
 
             RaisePointerInfo(p, true);
-            RequestPreviewInvalidate(true);
+            if (UsesThicknessCursor(tool))
+                InvalidateThicknessCursorTransition(p, p);
         }
 
         private void CanvasMouseMove(object sender, MouseEventArgs e)
         {
+            Point previousHover = hoverPoint;
+            bool hadPointer = pointerInside;
+
             Point p = ToLogicalPoint(e.Location);
             p = ClampPoint(p);
             hoverPoint = p;
             pointerInside = true;
 
+            if (measurePending)
+            {
+                if ((e.Button & MouseButtons.Left) == MouseButtons.Left && Distance(start, p) >= 3.0)
+                {
+                    measurePending = false;
+                    measuringDrag = true;
+                    measuredDragSize = Size.Empty;
+                    Point previousNow = now;
+                    now = ClampToImageBounds(p);
+                    measuredDragSize = Normalize(start, now).Size;
+                    RaisePointerInfo(p, false);
+                    InvalidateMeasurementTransition(previousNow, now);
+                    return;
+                }
+
+                if ((e.Button & MouseButtons.Left) == MouseButtons.Left)
+                {
+                    RaisePointerInfo(p, false);
+                    return;
+                }
+
+                measurePending = false;
+            }
+
             if (measuringDrag)
             {
+                Point previousNow = now;
                 now = ClampToImageBounds(p);
                 measuredDragSize = Normalize(start, now).Size;
                 RaisePointerInfo(p, false);
-                RequestPreviewInvalidate(false);
+                InvalidateMeasurementTransition(previousNow, now);
                 return;
             }
 
             if (!drawing)
             {
                 RaisePointerInfo(p, false);
-                if (NeedsHoverPreview()) RequestPreviewInvalidate(false);
+
+                // 1.0-series responsiveness without 1.0-series full-canvas repaint cost:
+                // the thickness cursor follows every WM_MOUSEMOVE, but only its previous/new
+                // footprint is dirtied. Windows can still coalesce paint messages naturally.
+                if (UsesThicknessCursor(tool))
+                    InvalidateThicknessCursorTransition(hadPointer ? previousHover : p, p);
+                else if (NeedsHoverPreview())
+                    RequestPreviewInvalidate(false);
                 return;
             }
 
+            Point previousNowDrawing = now;
             now = p;
 
             if (tool == EditorTool.Pen || tool == EditorTool.Highlighter)
@@ -1427,7 +1474,22 @@ namespace CapPicker
             }
 
             RaisePointerInfo(p, false);
-            RequestPreviewInvalidate(false);
+
+            if (tool == EditorTool.Pen || tool == EditorTool.Highlighter ||
+                tool == EditorTool.Eraser || tool == EditorTool.PixelEraser)
+            {
+                InvalidateStrokeTransition(previousNowDrawing, now);
+            }
+            else if (tool == EditorTool.Rectangle || tool == EditorTool.Ellipse ||
+                     tool == EditorTool.Arrow || tool == EditorTool.Check)
+            {
+                InvalidateShapePreviewTransition(previousNowDrawing, now);
+                InvalidateThicknessCursorTransition(previousNowDrawing, now);
+            }
+            else
+            {
+                RequestPreviewInvalidate(false);
+            }
         }
 
         private void CanvasMouseUp(object sender, MouseEventArgs e)
@@ -1440,23 +1502,37 @@ namespace CapPicker
                 return;
             }
 
+            if (measurePending && e.Button == MouseButtons.Left)
+            {
+                measurePending = false;
+                Point pointer = ClampPoint(ToLogicalPoint(e.Location));
+                RaisePointerInfo(pointer, true);
+                return;
+            }
+
             if (measuringDrag && e.Button == MouseButtons.Left)
             {
                 Point pointer = ClampPoint(ToLogicalPoint(e.Location));
+                Point previousNow = now;
                 now = ClampToImageBounds(pointer);
                 measuredDragSize = Normalize(start, now).Size;
                 measuringDrag = false;
                 RaisePointerInfo(pointer, true);
-                RequestPreviewInvalidate(true);
+                // Erase the old/new ruler outlines without repainting the whole canvas.
+                InvalidateMeasurementTransition(previousNow, now);
                 return;
             }
 
             if (!drawing || e.Button != MouseButtons.Left) return;
             now = ClampPoint(ToLogicalPoint(e.Location));
 
+            Rectangle finalDirty = Rectangle.Empty;
+            bool structuralChange = false;
+
             if (tool == EditorTool.Pen)
             {
                 if (strokePoints.Count == 0) strokePoints.Add(now);
+                finalDirty = GetStrokeLogicalBounds(strokePoints, Math.Max(1, strokeWidth));
                 using (Graphics g = Graphics.FromImage(current))
                 {
                     g.SetClip(imageBounds);
@@ -1468,6 +1544,7 @@ namespace CapPicker
             else if (tool == EditorTool.Highlighter)
             {
                 if (strokePoints.Count == 0) strokePoints.Add(now);
+                finalDirty = GetStrokeLogicalBounds(strokePoints, Math.Max(8, strokeWidth));
                 CommitHighlighterStroke();
                 strokePoints.Clear();
             }
@@ -1480,6 +1557,11 @@ namespace CapPicker
                 {
                     SaveUndo();
                     redo.Clear();
+                    Rectangle shapeBounds = tool == EditorTool.Check ? NormalizeAspect(start, now, 1.0f) : Normalize(start, now);
+                    int shapePad = Math.Max(4, strokeWidth / 2 + 4);
+                    shapeBounds.Inflate(shapePad, shapePad);
+                    shapeBounds.Intersect(imageBounds);
+                    finalDirty = shapeBounds;
                     using (Graphics g = Graphics.FromImage(current))
                     using (Pen p = BuildPen(false))
                     {
@@ -1499,12 +1581,26 @@ namespace CapPicker
                     SaveUndo();
                     redo.Clear();
                     CropTo(r);
+                    structuralChange = true;
                 }
             }
 
             drawing = false;
             RaisePointerInfo(now, true);
-            RequestPreviewInvalidate(true);
+
+            if (structuralChange)
+            {
+                // Crop changes the backing bitmap/control geometry, so this one
+                // operation legitimately requires a full repaint.
+                Invalidate();
+            }
+            else
+            {
+                if (!finalDirty.IsEmpty)
+                    InvalidateLogicalArea(finalDirty, 4);
+                if (UsesThicknessCursor(tool))
+                    InvalidateThicknessCursorTransition(now, now);
+            }
             RaiseHistoryChanged();
         }
 
@@ -1621,13 +1717,21 @@ namespace CapPicker
 
         private void CommitHighlighterStroke()
         {
-            using (Bitmap overlay = new Bitmap(current.Width, current.Height, PixelFormat.Format32bppArgb))
+            int width = Math.Max(8, strokeWidth);
+            Rectangle bounds = GetStrokeLogicalBounds(strokePoints, width);
+            if (bounds.IsEmpty) return;
+
+            // Do not allocate a full-canvas temporary bitmap just to commit one
+            // highlighter stroke. A local overlay preserves the same SourceCopy ->
+            // SourceOver compositing while keeping allocation proportional to the stroke.
+            using (Bitmap overlay = new Bitmap(bounds.Width, bounds.Height, PixelFormat.Format32bppArgb))
             {
                 using (Graphics g = Graphics.FromImage(overlay))
                 using (Pen p = BuildPen(true))
                 {
                     g.SmoothingMode = SmoothingMode.AntiAlias;
                     g.CompositingMode = CompositingMode.SourceCopy;
+                    g.TranslateTransform(-bounds.X, -bounds.Y);
                     p.StartCap = LineCap.Round;
                     p.EndCap = LineCap.Round;
                     p.LineJoin = LineJoin.Round;
@@ -1639,7 +1743,7 @@ namespace CapPicker
                         using (SolidBrush b = new SolidBrush(p.Color))
                             g.FillEllipse(b, pt.X - d / 2, pt.Y - d / 2, d, d);
                     }
-                    else
+                    else if (strokePoints.Count > 1)
                     {
                         g.DrawLines(p, strokePoints.ToArray());
                     }
@@ -1649,10 +1753,30 @@ namespace CapPicker
                 {
                     g.CompositingMode = CompositingMode.SourceOver;
                     g.SetClip(imageBounds);
-                    g.DrawImageUnscaled(overlay, 0, 0);
+                    g.DrawImageUnscaled(overlay, bounds.X, bounds.Y);
                     g.ResetClip();
                 }
             }
+        }
+
+        private Rectangle GetStrokeLogicalBounds(IList<Point> points, int width)
+        {
+            if (points == null || points.Count == 0) return Rectangle.Empty;
+            int minX = points[0].X, maxX = points[0].X;
+            int minY = points[0].Y, maxY = points[0].Y;
+            for (int i = 1; i < points.Count; i++)
+            {
+                Point pt = points[i];
+                if (pt.X < minX) minX = pt.X;
+                if (pt.X > maxX) maxX = pt.X;
+                if (pt.Y < minY) minY = pt.Y;
+                if (pt.Y > maxY) maxY = pt.Y;
+            }
+
+            int pad = Math.Max(4, width / 2 + 4);
+            Rectangle r = Rectangle.FromLTRB(minX - pad, minY - pad, maxX + pad + 1, maxY + pad + 1);
+            r.Intersect(imageBounds);
+            return r;
         }
 
         private Pen BuildPen(bool highlighter)
@@ -1697,6 +1821,7 @@ namespace CapPicker
             int diameter = Math.Max(8, strokeWidth);
             ClearLine(current, a, b, diameter, imageBounds);
             ClearLine(clean, a, b, diameter, imageBounds);
+            InvalidateCleanSnapshotCache();
         }
 
         private static void ClearLine(Bitmap target, Point a, Point b, int diameter, Rectangle clip)
@@ -2155,6 +2280,7 @@ namespace CapPicker
             clean.Dispose();
             current = paddedCurrent;
             clean = paddedClean;
+            InvalidateCleanSnapshotCache();
             imageBounds = nextImageBounds.IsEmpty
                 ? new Rectangle(CanvasMargin, CanvasMargin, Math.Max(1, r.Width), Math.Max(1, r.Height))
                 : nextImageBounds;
@@ -2173,6 +2299,7 @@ namespace CapPicker
             Rectangle oldImage = imageBounds;
             current.RotateFlip(RotateFlipType.Rotate270FlipNone);
             clean.RotateFlip(RotateFlipType.Rotate270FlipNone);
+            InvalidateCleanSnapshotCache();
             imageBounds = new Rectangle(
                 oldImage.Y,
                 oldWidth - (oldImage.X + oldImage.Width),
@@ -2195,6 +2322,7 @@ namespace CapPicker
             Rectangle oldImage = imageBounds;
             current.RotateFlip(RotateFlipType.Rotate90FlipNone);
             clean.RotateFlip(RotateFlipType.Rotate90FlipNone);
+            InvalidateCleanSnapshotCache();
             imageBounds = new Rectangle(
                 oldHeight - (oldImage.Y + oldImage.Height),
                 oldImage.X,
@@ -2215,6 +2343,7 @@ namespace CapPicker
 
             current.RotateFlip(RotateFlipType.RotateNoneFlipX);
             clean.RotateFlip(RotateFlipType.RotateNoneFlipX);
+            InvalidateCleanSnapshotCache();
 
             Invalidate();
             RaiseHistoryChanged();
@@ -2228,6 +2357,7 @@ namespace CapPicker
 
             current.RotateFlip(RotateFlipType.RotateNoneFlipY);
             clean.RotateFlip(RotateFlipType.RotateNoneFlipY);
+            InvalidateCleanSnapshotCache();
 
             Invalidate();
             RaiseHistoryChanged();
@@ -2327,9 +2457,16 @@ namespace CapPicker
         {
             EditorState s = new EditorState();
             s.Current = EncodePng(current);
-            s.Clean = EncodePng(clean);
+            if (cachedCleanPng == null)
+                cachedCleanPng = EncodePng(clean);
+            s.Clean = cachedCleanPng;
             s.ImageBounds = imageBounds;
             return s;
+        }
+
+        private void InvalidateCleanSnapshotCache()
+        {
+            cachedCleanPng = null;
         }
 
         private void RestoreState(EditorState state)
@@ -2340,6 +2477,7 @@ namespace CapPicker
             clean.Dispose();
             current = nextCurrent;
             clean = nextClean;
+            cachedCleanPng = state.Clean;
             imageBounds = state.ImageBounds;
             UpdateControlSize();
             if (ZoomChanged != null) ZoomChanged(this, EventArgs.Empty);
@@ -2451,14 +2589,113 @@ namespace CapPicker
             if (Parent != null) Parent.PerformLayout();
         }
 
+        private Rectangle LogicalToClientInvalidateRect(RectangleF logicalBounds, int extraPixels)
+        {
+            int left = (int)Math.Floor(logicalBounds.Left * zoomFactor) - extraPixels;
+            int top = (int)Math.Floor(logicalBounds.Top * zoomFactor) - extraPixels;
+            int right = (int)Math.Ceiling(logicalBounds.Right * zoomFactor) + extraPixels;
+            int bottom = (int)Math.Ceiling(logicalBounds.Bottom * zoomFactor) + extraPixels;
+
+            Rectangle r = Rectangle.FromLTRB(left, top, Math.Max(left + 1, right), Math.Max(top + 1, bottom));
+            r.Intersect(ClientRectangle);
+            return r;
+        }
+
+        private float ThicknessCursorLogicalRadius()
+        {
+            float d = Math.Max(1, strokeWidth);
+            float radius = d / 2f;
+            float gap = radius + Math.Max(3f / zoomFactor, 2f);
+            float arm = Math.Max(gap + 15f / zoomFactor, radius + 10f / zoomFactor);
+            return arm + Math.Max(3f / zoomFactor, 2f);
+        }
+
+        private Rectangle ThicknessCursorClientRect(Point p)
+        {
+            float radius = ThicknessCursorLogicalRadius();
+            RectangleF logical = RectangleF.FromLTRB(
+                p.X - radius, p.Y - radius, p.X + radius, p.Y + radius);
+            return LogicalToClientInvalidateRect(logical, 3);
+        }
+
+        private void InvalidateThicknessCursorTransition(Point oldPoint, Point newPoint)
+        {
+            Rectangle oldDirty = ThicknessCursorClientRect(oldPoint);
+            Rectangle newDirty = ThicknessCursorClientRect(newPoint);
+            if (!oldDirty.IsEmpty) Invalidate(oldDirty);
+            if (!newDirty.IsEmpty && newDirty != oldDirty) Invalidate(newDirty);
+        }
+
+        private void InvalidateStrokeTransition(Point oldPoint, Point newPoint)
+        {
+            float radius = ThicknessCursorLogicalRadius();
+            RectangleF logical = RectangleF.FromLTRB(
+                Math.Min(oldPoint.X, newPoint.X) - radius,
+                Math.Min(oldPoint.Y, newPoint.Y) - radius,
+                Math.Max(oldPoint.X, newPoint.X) + radius,
+                Math.Max(oldPoint.Y, newPoint.Y) + radius);
+            Rectangle dirty = LogicalToClientInvalidateRect(logical, 3);
+            if (!dirty.IsEmpty) Invalidate(dirty);
+        }
+
+        private Rectangle ShapePreviewLogicalBounds(Point endpoint)
+        {
+            Rectangle r = tool == EditorTool.Check ? NormalizeAspect(start, endpoint, 1.0f) : Normalize(start, endpoint);
+            int pad = Math.Max(4, strokeWidth / 2 + 5);
+            r.Inflate(pad, pad);
+            r.Intersect(imageBounds);
+            return r;
+        }
+
+        private void InvalidateShapePreviewTransition(Point oldPoint, Point newPoint)
+        {
+            Rectangle oldRect = ShapePreviewLogicalBounds(oldPoint);
+            Rectangle newRect = ShapePreviewLogicalBounds(newPoint);
+            if (!oldRect.IsEmpty) InvalidateLogicalArea(oldRect, 3);
+            if (!newRect.IsEmpty && newRect != oldRect) InvalidateLogicalArea(newRect, 3);
+        }
+
+        private void InvalidateMeasurementTransition(Point oldPoint, Point newPoint)
+        {
+            Rectangle oldRect = Normalize(start, oldPoint);
+            Rectangle newRect = Normalize(start, newPoint);
+            oldRect.Intersect(imageBounds);
+            newRect.Intersect(imageBounds);
+
+            InvalidateLogicalOutline(oldRect);
+            if (newRect != oldRect) InvalidateLogicalOutline(newRect);
+        }
+
+        private void InvalidateLogicalArea(Rectangle logicalRect, int extraPixels)
+        {
+            if (logicalRect.Width <= 0 || logicalRect.Height <= 0) return;
+            Rectangle dirty = LogicalToClientInvalidateRect(logicalRect, extraPixels);
+            if (!dirty.IsEmpty) Invalidate(dirty);
+        }
+
+        private void InvalidateLogicalOutline(Rectangle logicalRect)
+        {
+            if (logicalRect.Width <= 0 || logicalRect.Height <= 0) return;
+
+            int t = Math.Max(2, (int)Math.Ceiling(5f / zoomFactor));
+            Rectangle top = new Rectangle(logicalRect.Left - t, logicalRect.Top - t, logicalRect.Width + t * 2, t * 2 + 1);
+            Rectangle bottom = new Rectangle(logicalRect.Left - t, logicalRect.Bottom - t, logicalRect.Width + t * 2, t * 2 + 1);
+            Rectangle left = new Rectangle(logicalRect.Left - t, logicalRect.Top - t, t * 2 + 1, logicalRect.Height + t * 2);
+            Rectangle right = new Rectangle(logicalRect.Right - t, logicalRect.Top - t, t * 2 + 1, logicalRect.Height + t * 2);
+
+            Rectangle[] edges = new Rectangle[] { top, bottom, left, right };
+            for (int i = 0; i < edges.Length; i++)
+            {
+                Rectangle dirty = LogicalToClientInvalidateRect(edges[i], 2);
+                if (!dirty.IsEmpty) Invalidate(dirty);
+            }
+        }
+
         private void RequestPreviewInvalidate(bool force)
         {
-            int nowTick = Environment.TickCount;
-            int interval = AppSettings.LowSpecOptimization ? LowSpecPreviewInterval : NormalPreviewInterval;
-            if (!force && unchecked(nowTick - lastPreviewInvalidateTick) >= 0 &&
-                unchecked(nowTick - lastPreviewInvalidateTick) < interval) return;
-
-            lastPreviewInvalidateTick = nowTick;
+            // The 1.0-series never frame-throttled editor feedback. Keep that behavior for
+            // both Normal and Low-spec modes. Resource savings come from dirty-region paints,
+            // cheaper checker/picker paths and status sampling -- not by making the pointer lag.
             Invalidate();
         }
 

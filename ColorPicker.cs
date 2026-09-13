@@ -428,8 +428,12 @@ namespace CapPicker
     internal sealed class ColorPickerController : IDisposable
     {
         private static readonly int[] ZoomLevels = new int[] { 6, 8, 10, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128 };
-        private const int NormalMovingInterval = 25;
-        private const int NormalIdleInterval = 50;
+        // Normal mode intentionally matches the responsive 1.0-series cadence
+        // while moving. At idle the lens slows down: re-compositing identical
+        // pixels at 50 fps (DwmFlush + TOPMOST reposition + info Update) reads
+        // as constant flicker. Resume stays instant via the mouse hook below.
+        private const int NormalInterval = 20;
+        private const int NormalIdleInterval = 250;
         private const int LowSpecMovingInterval = 50;
         private const int LowSpecIdleInterval = 160;
         private const int LowSpecAccurateColorEvery = 5;
@@ -480,7 +484,7 @@ namespace CapPicker
 
                 hookProc = new Native.LowLevelMouseProc(MouseHook);
                 timer = new System.Windows.Forms.Timer();
-                timer.Interval = NormalMovingInterval;
+                timer.Interval = NormalInterval;
                 timer.Tick += TimerTick;
 
                 IsReady = true;
@@ -508,7 +512,7 @@ namespace CapPicker
             forceRefresh = true;
             lowSpecMode = AppSettings.LowSpecOptimization;
             lowSpecColorCounter = 0;
-            timer.Interval = lowSpecMode ? LowSpecMovingInterval : NormalMovingInterval;
+            timer.Interval = lowSpecMode ? LowSpecMovingInterval : NormalInterval;
             host.SetLowSpecMode(lowSpecMode);
             overlay.SetLowSpecMode(lowSpecMode);
 
@@ -613,14 +617,21 @@ namespace CapPicker
 
             info.UpdateInfo(point, live, zoom, !lowSpecMode);
 
-            // Adapt update cadence instead of burning CPU/GPU at a fixed high frame rate.
-            // Stationary cursors still refresh periodically so animated content can change.
-            int desiredInterval;
+            // Moving/zooming keeps the full cadence in both modes. A stationary
+            // lens still heartbeats slowly so animated content underneath stays
+            // live, without the 50 fps recomposition flicker. Resume latency is
+            // covered because the mouse hook forces a refresh + fast cadence on
+            // movement. Low-spec mode retains its slower cadence for resources.
             if (lowSpecMode)
-                desiredInterval = (moved || forced) ? LowSpecMovingInterval : LowSpecIdleInterval;
+            {
+                int desiredInterval = (moved || forced) ? LowSpecMovingInterval : LowSpecIdleInterval;
+                if (timer.Interval != desiredInterval) timer.Interval = desiredInterval;
+            }
             else
-                desiredInterval = (moved || forced) ? NormalMovingInterval : NormalIdleInterval;
-            if (timer.Interval != desiredInterval) timer.Interval = desiredInterval;
+            {
+                int desiredInterval = (moved || forced) ? NormalInterval : NormalIdleInterval;
+                if (timer.Interval != desiredInterval) timer.Interval = desiredInterval;
+            }
         }
 
         private void PositionInfoWindow(Point cursor, int hostX, int hostY)
@@ -650,7 +661,7 @@ namespace CapPicker
                 {
                     // Wake the adaptive timer immediately when movement resumes after an idle period.
                     forceRefresh = true;
-                    int movingInterval = lowSpecMode ? LowSpecMovingInterval : NormalMovingInterval;
+                    int movingInterval = lowSpecMode ? LowSpecMovingInterval : NormalInterval;
                     if (timer.Interval != movingInterval) timer.Interval = movingInterval;
                 }
 

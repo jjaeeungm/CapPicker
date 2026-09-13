@@ -1,4 +1,4 @@
-# CapPicker — Technical Notes / 기술 노트
+﻿# CapPicker — Technical Notes / 기술 노트
 
 Developer-oriented implementation notes for CapPicker 2.1.0.
 User-facing documentation lives in [README.md](README.md) / [README.txt](README.txt).
@@ -14,27 +14,33 @@ User-facing documentation lives in [README.md](README.md) / [README.txt](README.
 ## Scroll capture (v2.1) / 스크롤 캡처
 
 - Flow: Scroll button (right of Last Region) → pick a window → auto-scroll →
-  visual overlap stitching → existing Editor pipeline. No new global hotkey.
-- Scroll actuation: `WM_MOUSEWHEEL` via `SendMessage` first (no cursor move,
-  no focus steal beyond foreground); `WM_VSCROLL`/`SB_PAGEDOWN` fallback.
-  Movement is verified visually — if the wheel moves nothing, PageDown is
-  tried once before finishing.
-- Stitching never trusts scroll distance: the largest overlap (16px–95% of
-  usable frame height) between the accumulator tail and the new frame head
-  is found with `LockBits` integer math and 1px steps, so DPI, wheel
-  settings, and per-app scroll units cannot skew the seam.
-- End conditions: identical consecutive frames (0.1% tolerance for
-  blinkers/carets), 50-frame cap, 16000px total height cap, closed window,
-  or Esc. Esc keeps the frames captured so far.
-- Sticky headers/toolbars are detected as the static row prefix shared by
-  adjacent frames at the same position and skipped before matching, so the
-  seam never compares header-vs-content. The stitch offset compensates
-  for the trimmed prefix.
-- Memory peak is two frames plus the result (incremental stitching).
-- Vertical scrolling only.
-- A per-run diagnostic log (`scroll-last.log` next to the exe, plus
-  `scroll-dbg-*.png` frames) records region, per-frame equality/overlap/best
-  scores, and the stop reason. TODO(release): stop writing these files.
+  stitch → open the result in the existing editor.
+- Scroll target: the child window/control under the capture-region center is
+  preferred; the selected top-level HWND remains the fallback.
+- Scroll actuation: `WM_MOUSEWHEEL` first, `WM_VSCROLL/SB_PAGEDOWN` fallback.
+- Matching is **adjacent-frame based** (`previous` ↔ `current`), not against the
+  growing accumulator. This bounds match memory and makes the append height the
+  actual detected scroll delta.
+- Sticky top UI is detected as a static prefix. The prefix and visual overlap
+  are kept only once; each later frame contributes **new bottom pixels only**.
+  A short median history stabilizes the prefix; abrupt outliers (>96 px from the
+  recent baseline) are ignored.
+- A short median history of recent scroll deltas is used as a continuity hint
+  to reject alias matches in repetitive tables/lists. Expected-shift matching
+  accepts similarity down to 0.87; the broad fallback remains 0.92.
+- Pixel matching tolerates small RGB/luminance differences caused by ClearType,
+  fractional DPI and compositor timing instead of requiring exact ARGB values.
+- If a stitch candidate fails, CapPicker re-captures the **same scroll position**
+  up to two times before stopping; it does not immediately scroll again and
+  skip an interval.
+- Vertical scrolling only. `Esc` stops early and keeps the valid stitched part.
+- Safety limits: 50 frames, 16,000px total height.
+- Scroll capture writes no `scroll-dbg-*.png` or `scroll-last.log` files;
+  frame diagnostics stay out of normal/release execution entirely.
+- Top positioning uses `SB_TOP` plus modifier-free upward wheel messages only;
+  no `Ctrl+Home` is injected, so scroll capture cannot change browser zoom.
+- Normal timing: settle 500ms / retry 160ms / top probe 450ms. Low-spec mode:
+  settle 1000ms / retry 360ms / top probe 900ms. Waiting uses `Sleep`, not a busy loop.
 
 ## Capture engine / 캡처 엔진
 
@@ -47,6 +53,22 @@ User-facing documentation lives in [README.md](README.md) / [README.txt](README.
   Z-order traversal fallback (also skips CapPicker's own highlight in hit-testing).
 - A settle delay after the selection border disappears lets DWM clear it
   before the capture runs.
+
+
+## Capture delay / 지연 캡처
+
+- One shared 0 / 3 / 5 second delay applies to rectangle, fixed-size, window,
+  full-screen, last-region and scroll capture. The color picker is unaffected.
+- Rectangle/fixed-size: the selection overlay starts after the delay, so its
+  screen snapshot represents the delayed moment.
+- Window/scroll: the target window is selected first, then the delay runs before
+  the actual capture/auto-scroll. This lets the user prepare menus or other UI
+  inside the already-selected target.
+- Full-screen/last-region: capture runs directly after the delay.
+- During the countdown CapPicker remains hidden and never calls `Activate()`, so
+  the target application keeps focus. `Esc` cancels the pending capture.
+- Low-spec optimization never changes the user-selected 3/5 second delay. It
+  only relaxes internal scroll frame settle/retry timing.
 
 ## Color pickers / 컬러피커
 

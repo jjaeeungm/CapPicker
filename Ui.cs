@@ -339,247 +339,498 @@ internal static class UiFonts
 
         private static void DrawIcon(Graphics g, Rectangle r, AppIcon kind, Color color)
         {
+            // CapPicker icon language:
+            // - 24/25px class, rounded outline, one primary metaphor per icon.
+            // - Avoid font glyphs for toolbar icons so stroke/weight stays consistent.
+            // - Rotation is a circular arrow; Undo/Redo is a hook arrow. Do not mix them.
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            float w = Math.Max(1.5f, r.Width / 11f);
-            using (Pen p = new Pen(color, w))
+
+            float unit = Math.Min(r.Width, r.Height);
+            float stroke = Math.Max(1.45f, unit / 12.5f);
+            float pad = Math.Max(1.6f, unit * 0.105f);
+            float l = r.Left + pad;
+            float t = r.Top + pad;
+            float rr = r.Right - pad;
+            float bb = r.Bottom - pad;
+            float cx = (l + rr) * 0.5f;
+            float cy = (t + bb) * 0.5f;
+            float iw = rr - l;
+            float ih = bb - t;
+
+            using (Pen p = new Pen(color, stroke))
             using (SolidBrush b = new SolidBrush(color))
             {
                 p.StartCap = LineCap.Round;
                 p.EndCap = LineCap.Round;
                 p.LineJoin = LineJoin.Round;
 
-                int l = r.Left + 2;
-                int t = r.Top + 2;
-                int rr = r.Right - 2;
-                int bb = r.Bottom - 2;
-                int cx = r.Left + r.Width / 2;
-                int cy = r.Top + r.Height / 2;
-
                 switch (kind)
                 {
                     case AppIcon.RectangleCapture:
-                    case AppIcon.Rectangle:
-                        g.DrawRectangle(p, l, t + 1, rr - l, bb - t - 2);
+                        DrawCaptureCorners(g, p, l, t, rr, bb);
                         break;
+
                     case AppIcon.SizeCapture:
-                        g.DrawRectangle(p, l + 2, t + 3, rr - l - 4, bb - t - 6);
-                        g.DrawLine(p, l, cy, rr, cy);
-                        g.DrawLine(p, l, cy, l + 3, cy - 3);
-                        g.DrawLine(p, l, cy, l + 3, cy + 3);
-                        g.DrawLine(p, rr, cy, rr - 3, cy - 3);
-                        g.DrawLine(p, rr, cy, rr - 3, cy + 3);
-                        break;
-                    case AppIcon.WindowCapture:
-                        g.DrawRectangle(p, l, t + 1, rr - l, bb - t - 2);
-                        g.DrawLine(p, l, t + 5, rr, t + 5);
-                        break;
-                    case AppIcon.FullScreen:
-                        g.DrawLine(p, l, t + 5, l, t); g.DrawLine(p, l, t, l + 5, t);
-                        g.DrawLine(p, rr - 5, t, rr, t); g.DrawLine(p, rr, t, rr, t + 5);
-                        g.DrawLine(p, l, bb - 5, l, bb); g.DrawLine(p, l, bb, l + 5, bb);
-                        g.DrawLine(p, rr - 5, bb, rr, bb); g.DrawLine(p, rr, bb - 5, rr, bb);
-                        break;
-                    case AppIcon.History:
-                        g.DrawArc(p, l + 2, t + 2, rr - l - 4, bb - t - 4, 35, 290);
-                        g.DrawLine(p, l + 2, cy - 3, l + 2, cy + 3);
-                        g.DrawLine(p, l + 2, cy + 3, l + 7, cy + 3);
-                        break;
-                    case AppIcon.ScrollCapture:
-                        // Small window with a down chevron beneath: scroll capture.
-                        g.DrawRectangle(p, l + 1, t, rr - l - 2, bb - t - 8);
-                        g.DrawLine(p, l + 1, t + 4, rr - 1, t + 4);
-                        g.DrawLine(p, cx - 4, bb - 5, cx, bb - 1);
-                        g.DrawLine(p, cx, bb - 1, cx + 4, bb - 5);
-                        break;
-                    case AppIcon.Eyedropper:
-                        g.DrawLine(p, l + 4, bb - 2, rr - 3, t + 3);
-                        g.DrawEllipse(p, rr - 6, t, 6, 6);
-                        g.DrawLine(p, l + 2, bb, l + 6, bb - 4);
-                        break;
-                    case AppIcon.Pen:
+                        // Selection corners + horizontal dimension arrow.
+                        DrawCaptureCorners(g, p, l, t, rr, bb);
                         {
-                            Point[] body = new Point[] {
-                                new Point(l + 3, bb - 5),
-                                new Point(l + 7, bb - 1),
-                                new Point(rr - 1, t + 7),
-                                new Point(rr - 6, t + 2)
-                            };
-                            g.DrawPolygon(p, body);
-                            g.DrawLine(p, l + 3, bb - 5, l + 1, bb);
-                            g.DrawLine(p, l + 7, bb - 1, l + 1, bb);
-                            g.DrawLine(p, rr - 6, t + 2, rr - 1, t + 7);
-                            g.FillEllipse(b, l + 3, bb - 6, 3, 3);
+                            float x1 = l + iw * 0.18f;
+                            float x2 = rr - iw * 0.18f;
+                            g.DrawLine(p, x1, cy, x2, cy);
+                            DrawArrowHead(g, p, new PointF(x1, cy), new PointF(x1 + iw * 0.22f, cy), unit * 0.14f);
+                            DrawArrowHead(g, p, new PointF(x2, cy), new PointF(x2 - iw * 0.22f, cy), unit * 0.14f);
                         }
                         break;
-                    case AppIcon.Highlighter:
+
+                    case AppIcon.WindowCapture:
+                        // A single application window is clearer than two overlapping boxes at 25px.
                         {
-                            Point[] body = new Point[] {
-                                new Point(l + 3, bb - 5),
-                                new Point(l + 8, bb),
-                                new Point(rr, t + 8),
-                                new Point(rr - 7, t + 1)
+                            RectangleF win = new RectangleF(l + iw * 0.04f, t + ih * 0.08f, iw * 0.92f, ih * 0.84f);
+                            g.DrawRectangle(p, win.X, win.Y, win.Width, win.Height);
+                            g.DrawLine(p, win.Left, win.Top + ih * 0.22f, win.Right, win.Top + ih * 0.22f);
+                            float dot = Math.Max(1.5f, unit * 0.055f);
+                            g.FillEllipse(b, win.Left + iw * 0.10f - dot * 0.5f, win.Top + ih * 0.11f - dot * 0.5f, dot, dot);
+                            g.FillEllipse(b, win.Left + iw * 0.20f - dot * 0.5f, win.Top + ih * 0.11f - dot * 0.5f, dot, dot);
+                        }
+                        break;
+
+                    case AppIcon.FullScreen:
+                        // Monitor outline = entire display; distinct from region-selection corners.
+                        {
+                            RectangleF screen = new RectangleF(l + iw * 0.02f, t + ih * 0.04f, iw * 0.96f, ih * 0.68f);
+                            g.DrawRectangle(p, screen.X, screen.Y, screen.Width, screen.Height);
+                            g.DrawLine(p, cx, screen.Bottom, cx, bb - ih * 0.05f);
+                            g.DrawLine(p, cx - iw * 0.19f, bb - ih * 0.05f, cx + iw * 0.19f, bb - ih * 0.05f);
+                        }
+                        break;
+
+                    case AppIcon.History:
+                        // Last region = remembered dashed selection + small replay arrow.
+                        {
+                            using (Pen dp = new Pen(color, Math.Max(1f, stroke * 0.72f)))
+                            {
+                                dp.DashStyle = DashStyle.Dash;
+                                dp.DashCap = DashCap.Round;
+                                g.DrawRectangle(dp, l + iw * 0.03f, t + ih * 0.08f, iw * 0.73f, ih * 0.72f);
+                            }
+                            RectangleF arc = new RectangleF(cx + iw * 0.01f, cy + ih * 0.01f, iw * 0.43f, ih * 0.43f);
+                            DrawArcArrow(g, p, arc, 35f, 220f, unit * 0.13f);
+                        }
+                        break;
+
+                    case AppIcon.ScrollCapture:
+                        // Page + right-side scroll direction.
+                        {
+                            RectangleF page = new RectangleF(l + iw * 0.02f, t + ih * 0.03f, iw * 0.78f, ih * 0.92f);
+                            g.DrawRectangle(p, page.X, page.Y, page.Width, page.Height);
+                            g.DrawLine(p, page.Left, page.Top + ih * 0.19f, page.Right, page.Top + ih * 0.19f);
+                            float sx = rr - iw * 0.07f;
+                            float sy1 = t + ih * 0.28f;
+                            float sy2 = bb - ih * 0.10f;
+                            g.DrawLine(p, sx, sy1, sx, sy2);
+                            DrawArrowHead(g, p, new PointF(sx, sy2), new PointF(sx, sy1), unit * 0.15f);
+                        }
+                        break;
+
+                    case AppIcon.Eyedropper:
+                        DrawEyedropper(g, p, l, t, rr, bb);
+                        break;
+
+                    case AppIcon.Pen:
+                        {
+                            PointF[] body = new PointF[] {
+                                new PointF(l + iw * 0.12f, bb - ih * 0.27f),
+                                new PointF(l + iw * 0.34f, bb - ih * 0.05f),
+                                new PointF(rr - iw * 0.04f, t + ih * 0.30f),
+                                new PointF(rr - iw * 0.28f, t + ih * 0.06f)
                             };
                             g.DrawPolygon(p, body);
-                            using (Pen hp = new Pen(color, Math.Max(4f, w * 2.4f)))
+                            PointF nib = new PointF(l + iw * 0.03f, bb - ih * 0.02f);
+                            g.DrawLine(p, body[0], nib);
+                            g.DrawLine(p, body[1], nib);
+                        }
+                        break;
+
+                    case AppIcon.Highlighter:
+                        {
+                            PointF[] body = new PointF[] {
+                                new PointF(l + iw * 0.14f, bb - ih * 0.31f),
+                                new PointF(l + iw * 0.41f, bb - ih * 0.04f),
+                                new PointF(rr - iw * 0.03f, t + ih * 0.38f),
+                                new PointF(rr - iw * 0.34f, t + ih * 0.07f)
+                            };
+                            g.DrawPolygon(p, body);
+                            using (Pen hp = new Pen(color, Math.Max(3f, stroke * 2.05f)))
                             {
                                 hp.StartCap = LineCap.Square;
                                 hp.EndCap = LineCap.Square;
-                                g.DrawLine(hp, l + 1, bb - 1, l + 9, bb - 1);
+                                g.DrawLine(hp, l + iw * 0.04f, bb - ih * 0.02f, l + iw * 0.45f, bb - ih * 0.02f);
                             }
                         }
                         break;
+
+                    case AppIcon.Rectangle:
+                        g.DrawRectangle(p, l + iw * 0.05f, t + ih * 0.10f, iw * 0.90f, ih * 0.80f);
+                        break;
+
                     case AppIcon.Ellipse:
-                        g.DrawEllipse(p, l, t + 1, rr - l, bb - t - 2);
+                        g.DrawEllipse(p, l + iw * 0.04f, t + ih * 0.10f, iw * 0.92f, ih * 0.80f);
                         break;
+
                     case AppIcon.Arrow:
-                        // 좌우 반전된 하향 화살표: 좌상단에서 우하단으로 향합니다.
-                        g.DrawLine(p, l + 2, t + 2, rr - 3, bb - 3);
-                        g.DrawLine(p, rr - 3, bb - 3, rr - 9, bb - 3);
-                        g.DrawLine(p, rr - 3, bb - 3, rr - 3, bb - 9);
+                        {
+                            PointF from = new PointF(l + iw * 0.10f, t + ih * 0.12f);
+                            PointF tip = new PointF(rr - iw * 0.08f, bb - ih * 0.10f);
+                            g.DrawLine(p, from, tip);
+                            DrawArrowHead(g, p, tip, from, unit * 0.26f);
+                        }
                         break;
+
                     case AppIcon.Check:
-                        using (Font cf = new Font("Segoe UI Symbol", Math.Max(11f, r.Height * 0.72f), FontStyle.Regular, GraphicsUnit.Pixel))
+                        using (Pen cp = new Pen(color, Math.Max(stroke, unit / 9.8f)))
                         {
-                            TextRenderer.DrawText(g, "✔", cf, r, color,
-                                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                            cp.StartCap = LineCap.Round;
+                            cp.EndCap = LineCap.Round;
+                            cp.LineJoin = LineJoin.Round;
+                            g.DrawLines(cp, new PointF[] {
+                                new PointF(l + iw * 0.09f, cy + ih * 0.02f),
+                                new PointF(l + iw * 0.39f, bb - ih * 0.11f),
+                                new PointF(rr - iw * 0.04f, t + ih * 0.13f)
+                            });
                         }
                         break;
+
                     case AppIcon.Emoji:
-                        using (Font ef = new Font("Segoe UI Emoji", Math.Max(10f, r.Height * 0.68f), FontStyle.Regular, GraphicsUnit.Pixel))
+                        // Stamp/symbol tool: neutral monochrome smile keeps the toolbar coherent.
                         {
-                            TextRenderer.DrawText(g, "😊", ef, r, color,
-                                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                            float d = Math.Min(iw, ih) * 0.88f;
+                            RectangleF face = new RectangleF(cx - d * 0.5f, cy - d * 0.5f, d, d);
+                            g.DrawEllipse(p, face);
+                            float eye = Math.Max(1.7f, unit * 0.067f);
+                            g.FillEllipse(b, cx - d * 0.21f - eye * 0.5f, cy - d * 0.15f, eye, eye);
+                            g.FillEllipse(b, cx + d * 0.21f - eye * 0.5f, cy - d * 0.15f, eye, eye);
+                            g.DrawArc(p, cx - d * 0.25f, cy - d * 0.02f, d * 0.50f, d * 0.33f, 15f, 150f);
                         }
                         break;
+
                     case AppIcon.Text:
-                        using (Font f = new Font("Segoe UI", Math.Max(10f, r.Height * 0.70f), FontStyle.Bold, GraphicsUnit.Pixel))
+                        using (Pen tp = new Pen(color, Math.Max(stroke, unit / 10.0f)))
                         {
-                            TextRenderer.DrawText(g, "T", f, r, color,
-                                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+                            tp.StartCap = LineCap.Round;
+                            tp.EndCap = LineCap.Round;
+                            g.DrawLine(tp, l + iw * 0.13f, t + ih * 0.10f, rr - iw * 0.13f, t + ih * 0.10f);
+                            g.DrawLine(tp, cx, t + ih * 0.10f, cx, bb - ih * 0.05f);
                         }
                         break;
+
                     case AppIcon.Eraser:
                     case AppIcon.PixelEraser:
                         {
-                            Point[] er = new Point[] {
-                                new Point(l + 2, cy + 4),
-                                new Point(cx + 1, t + 1),
-                                new Point(rr - 1, t + 7),
-                                new Point(cx - 2, bb - 1)
+                            PointF[] er = new PointF[] {
+                                new PointF(l + iw * 0.08f, cy + ih * 0.13f),
+                                new PointF(cx + iw * 0.03f, t + ih * 0.04f),
+                                new PointF(rr - iw * 0.05f, t + ih * 0.35f),
+                                new PointF(cx - iw * 0.08f, bb - ih * 0.02f)
                             };
                             g.DrawPolygon(p, er);
-                            g.DrawLine(p, l + 1, bb - 1, cx + 4, bb - 1);
-                            g.DrawLine(p, cx - 4, cy + 7, cx + 3, bb - 1);
+                            g.DrawLine(p, l + iw * 0.03f, bb - ih * 0.02f, cx + iw * 0.17f, bb - ih * 0.02f);
+                            g.DrawLine(p, l + iw * 0.29f, cy + ih * 0.24f, cx + iw * 0.15f, bb - ih * 0.02f);
                             if (kind == AppIcon.PixelEraser)
                             {
-                                int q = Math.Max(2, r.Width / 8);
-                                g.FillRectangle(b, rr - q * 2, bb - q, q, q);
-                                g.FillRectangle(b, rr - q, bb - q * 2, q, q);
+                                float q = Math.Max(2f, unit * 0.115f);
+                                float px = rr - q * 2.05f;
+                                float py = bb - q * 1.95f;
+                                g.FillRectangle(b, px, py + q, q, q);
+                                g.FillRectangle(b, px + q, py, q, q);
+                                g.DrawRectangle(p, px, py, q, q);
+                                g.DrawRectangle(p, px + q, py + q, q, q);
                             }
                         }
                         break;
+
                     case AppIcon.Crop:
-                        g.DrawLine(p, l + 4, t, l + 4, bb - 4);
-                        g.DrawLine(p, l + 4, bb - 4, rr, bb - 4);
-                        g.DrawLine(p, l, t + 4, rr - 4, t + 4);
-                        g.DrawLine(p, rr - 4, t + 4, rr - 4, bb);
+                        {
+                            float x1 = l + iw * 0.28f;
+                            float y1 = t + ih * 0.08f;
+                            float x2 = rr - iw * 0.10f;
+                            float y2 = bb - ih * 0.28f;
+                            g.DrawLine(p, x1, t, x1, y2);
+                            g.DrawLine(p, x1, y2, rr, y2);
+                            g.DrawLine(p, l, y1, x2, y1);
+                            g.DrawLine(p, x2, y1, x2, bb);
+                        }
                         break;
+
                     case AppIcon.RotateLeft:
-                    case AppIcon.Undo:
-                        g.DrawArc(p, l + 4, t + 3, rr - l - 5, bb - t - 5, 200, 270);
-                        g.DrawLine(p, l + 3, cy - 3, l + 3, t + 2);
-                        g.DrawLine(p, l + 3, t + 2, l + 8, t + 2);
+                        DrawRotateIcon(g, p, l, t, rr, bb, false);
                         break;
                     case AppIcon.RotateRight:
+                        DrawRotateIcon(g, p, l, t, rr, bb, true);
+                        break;
+                    case AppIcon.Undo:
+                        DrawUndoRedoIcon(g, p, l, t, rr, bb, false);
+                        break;
                     case AppIcon.Redo:
-                        g.DrawArc(p, l + 1, t + 3, rr - l - 5, bb - t - 5, -110, 270);
-                        g.DrawLine(p, rr - 3, cy - 3, rr - 3, t + 2);
-                        g.DrawLine(p, rr - 3, t + 2, rr - 8, t + 2);
+                        DrawUndoRedoIcon(g, p, l, t, rr, bb, true);
                         break;
+
                     case AppIcon.Copy:
-                        g.DrawRectangle(p, l + 5, t + 1, rr - l - 5, bb - t - 5);
-                        g.DrawRectangle(p, l, t + 6, rr - l - 5, bb - t - 5);
-                        break;
-                    case AppIcon.Save:
-                        g.DrawRectangle(p, l, t, rr - l, bb - t);
-                        g.DrawRectangle(p, l + 4, t + 2, rr - l - 8, 5);
-                        g.DrawRectangle(p, l + 4, cy + 2, rr - l - 8, bb - cy - 4);
-                        break;
-                    case AppIcon.Print:
-                        g.DrawRectangle(p, l + 4, t, rr - l - 8, Math.Max(4, (cy - t) - 1));
-                        g.DrawRectangle(p, l + 2, cy - 2, rr - l - 4, Math.Max(5, bb - cy - 2));
-                        g.DrawRectangle(p, l + 5, cy + 2, rr - l - 10, Math.Max(3, bb - cy - 5));
-                        g.FillEllipse(b, rr - 5, cy, Math.Max(2, r.Width / 10), Math.Max(2, r.Width / 10));
-                        break;
-                    case AppIcon.Settings:
                         {
-                            // Classic cog: toothed outer ring with center hole.
-                            int outer = Math.Max(6, r.Width / 2);
-                            int inner = Math.Max(3, r.Width / 5);
-                            int tooth = Math.Max(2, r.Width / 8);
-                            g.DrawEllipse(p, cx - outer / 2, cy - outer / 2, outer, outer);
-                            for (int i = 0; i < 8; i++)
-                            {
-                                double a = Math.PI * i / 4.0;
-                                int x1 = cx + (int)Math.Round(Math.Cos(a) * (outer / 2.0 - 1));
-                                int y1 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0 - 1));
-                                int x2 = cx + (int)Math.Round(Math.Cos(a) * (outer / 2.0 + tooth));
-                                int y2 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0 + tooth));
-                                g.DrawLine(p, x1, y1, x2, y2);
-                            }
-                            g.DrawEllipse(p, cx - inner / 2, cy - inner / 2, inner, inner);
+                            RectangleF back = new RectangleF(l + iw * 0.27f, t + ih * 0.03f, iw * 0.66f, ih * 0.66f);
+                            RectangleF front = new RectangleF(l + iw * 0.03f, t + ih * 0.28f, iw * 0.66f, ih * 0.66f);
+                            g.DrawRectangle(p, back.X, back.Y, back.Width, back.Height);
+                            g.DrawRectangle(p, front.X, front.Y, front.Width, front.Height);
                         }
                         break;
+
+                    case AppIcon.Save:
+                        {
+                            RectangleF body = new RectangleF(l + iw * 0.05f, t + ih * 0.02f, iw * 0.90f, ih * 0.94f);
+                            g.DrawRectangle(p, body.X, body.Y, body.Width, body.Height);
+                            g.DrawRectangle(p, l + iw * 0.23f, t + ih * 0.04f, iw * 0.47f, ih * 0.26f);
+                            g.DrawRectangle(p, l + iw * 0.22f, cy + ih * 0.11f, iw * 0.56f, ih * 0.28f);
+                        }
+                        break;
+
+                    case AppIcon.Print:
+                        {
+                            RectangleF paper = new RectangleF(l + iw * 0.25f, t, iw * 0.50f, ih * 0.38f);
+                            RectangleF body = new RectangleF(l + iw * 0.06f, t + ih * 0.30f, iw * 0.88f, ih * 0.43f);
+                            RectangleF output = new RectangleF(l + iw * 0.21f, t + ih * 0.57f, iw * 0.58f, ih * 0.38f);
+                            g.DrawRectangle(p, paper.X, paper.Y, paper.Width, paper.Height);
+                            g.DrawRectangle(p, body.X, body.Y, body.Width, body.Height);
+                            g.DrawRectangle(p, output.X, output.Y, output.Width, output.Height);
+                            float dot = Math.Max(1.6f, unit * 0.06f);
+                            g.FillEllipse(b, body.Right - iw * 0.15f - dot * 0.5f, body.Top + ih * 0.16f - dot * 0.5f, dot, dot);
+                        }
+                        break;
+
+                    case AppIcon.Settings:
+                        DrawGear(g, p, l, t, rr, bb);
+                        break;
+
                     case AppIcon.Timer:
                         {
-                            // Slim clock face with two hands (matches thin icons).
-                            int radius = Math.Max(3, (rr - l - 8) / 2);
-                            using (Pen tp = new Pen(color, Math.Max(1f, w * 0.65f)))
-                            {
-                                tp.StartCap = LineCap.Round;
-                                tp.EndCap = LineCap.Round;
-                                g.DrawEllipse(tp, cx - radius, cy - radius, radius * 2, radius * 2);
-                                g.DrawLine(tp, cx, cy, cx, cy - radius + 1);
-                                g.DrawLine(tp, cx, cy, cx + radius - 3, cy + 2);
-                            }
-                            g.FillEllipse(b, cx - 1, cy - 1, 3, 3);
+                            float d = Math.Min(iw, ih) * 0.76f;
+                            RectangleF clock = new RectangleF(cx - d * 0.5f, cy - d * 0.41f, d, d);
+                            g.DrawEllipse(p, clock);
+                            g.DrawLine(p, cx, clock.Top, cx, t);
+                            g.DrawLine(p, cx - d * 0.13f, t, cx + d * 0.13f, t);
+                            g.DrawLine(p, cx, cy - d * 0.01f, cx, cy - d * 0.24f);
+                            g.DrawLine(p, cx, cy - d * 0.01f, cx + d * 0.20f, cy + d * 0.10f);
                         }
                         break;
+
                     case AppIcon.FlipHorizontal:
-                        {
-                            // Object with its mirror: filled triangle pointing
-                            // right plus a dotted mirror axis on its left.
-                            using (Pen dp = new Pen(color, 1f))
-                            {
-                                dp.DashStyle = DashStyle.Dot;
-                                g.DrawLine(dp, cx - 3, t + 1, cx - 3, bb - 1);
-                            }
-                            Point[] tri = new Point[] {
-                                new Point(rr - 2, cy),
-                                new Point(cx + 1, t + 2),
-                                new Point(cx + 1, bb - 2)
-                            };
-                            g.FillPolygon(b, tri);
-                        }
+                        DrawFlipIcon(g, p, l, t, rr, bb, true);
                         break;
                     case AppIcon.FlipVertical:
-                        {
-                            // Object with its mirror: filled triangle pointing
-                            // down plus a dotted mirror axis above it.
-                            using (Pen dp = new Pen(color, 1f))
-                            {
-                                dp.DashStyle = DashStyle.Dot;
-                                g.DrawLine(dp, l + 1, cy - 3, rr - 1, cy - 3);
-                            }
-                            Point[] tri = new Point[] {
-                                new Point(cx, bb - 2),
-                                new Point(l + 2, cy + 1),
-                                new Point(rr - 2, cy + 1)
-                            };
-                            g.FillPolygon(b, tri);
-                        }
+                        DrawFlipIcon(g, p, l, t, rr, bb, false);
                         break;
                 }
+            }
+        }
+
+        private static void DrawCaptureCorners(Graphics g, Pen p, float l, float t, float rr, float bb)
+        {
+            float sx = (rr - l) * 0.27f;
+            float sy = (bb - t) * 0.27f;
+            g.DrawLine(p, l, t + sy, l, t); g.DrawLine(p, l, t, l + sx, t);
+            g.DrawLine(p, rr - sx, t, rr, t); g.DrawLine(p, rr, t, rr, t + sy);
+            g.DrawLine(p, l, bb - sy, l, bb); g.DrawLine(p, l, bb, l + sx, bb);
+            g.DrawLine(p, rr - sx, bb, rr, bb); g.DrawLine(p, rr, bb - sy, rr, bb);
+        }
+
+        private static void DrawArrowHead(Graphics g, Pen p, PointF tip, PointF from, float size)
+        {
+            float dx = tip.X - from.X;
+            float dy = tip.Y - from.Y;
+            float len = (float)Math.Sqrt(dx * dx + dy * dy);
+            if (len < 0.001f) return;
+            dx /= len; dy /= len;
+            float px = -dy; float py = dx;
+            float backX = tip.X - dx * size;
+            float backY = tip.Y - dy * size;
+            float wing = size * 0.52f;
+            g.DrawLine(p, tip, new PointF(backX + px * wing, backY + py * wing));
+            g.DrawLine(p, tip, new PointF(backX - px * wing, backY - py * wing));
+        }
+
+        private static PointF EllipsePoint(RectangleF r, float degrees)
+        {
+            double a = degrees * Math.PI / 180.0;
+            return new PointF(
+                r.Left + r.Width * 0.5f + (float)Math.Cos(a) * r.Width * 0.5f,
+                r.Top + r.Height * 0.5f + (float)Math.Sin(a) * r.Height * 0.5f);
+        }
+
+        private static void DrawArcArrow(Graphics g, Pen p, RectangleF arc, float start, float sweep, float headSize)
+        {
+            g.DrawArc(p, arc, start, sweep);
+            float end = start + sweep;
+            float backAngle = end - (sweep >= 0f ? 12f : -12f);
+            PointF tip = EllipsePoint(arc, end);
+            PointF from = EllipsePoint(arc, backAngle);
+            DrawArrowHead(g, p, tip, from, headSize);
+        }
+
+        private static void DrawUndoRedoIcon(Graphics g, Pen p, float l, float t, float rr, float bb, bool right)
+        {
+            float iw = rr - l;
+            float ih = bb - t;
+            float cy = (t + bb) * 0.5f;
+            float size = Math.Min(iw, ih) * 0.20f;
+
+            if (!right)
+            {
+                PointF tip = new PointF(l + iw * 0.02f, cy - ih * 0.03f);
+                PointF join = new PointF(l + iw * 0.33f, cy - ih * 0.03f);
+                g.DrawLine(p, tip, join);
+                using (GraphicsPath path = new GraphicsPath())
+                {
+                    path.AddBezier(join,
+                        new PointF(l + iw * 0.38f, t + ih * 0.12f),
+                        new PointF(rr - iw * 0.10f, t + ih * 0.10f),
+                        new PointF(rr - iw * 0.04f, bb - ih * 0.13f));
+                    g.DrawPath(p, path);
+                }
+                DrawArrowHead(g, p, tip, join, size);
+            }
+            else
+            {
+                PointF tip = new PointF(rr - iw * 0.02f, cy - ih * 0.03f);
+                PointF join = new PointF(rr - iw * 0.33f, cy - ih * 0.03f);
+                g.DrawLine(p, tip, join);
+                using (GraphicsPath path = new GraphicsPath())
+                {
+                    path.AddBezier(join,
+                        new PointF(rr - iw * 0.38f, t + ih * 0.12f),
+                        new PointF(l + iw * 0.10f, t + ih * 0.10f),
+                        new PointF(l + iw * 0.04f, bb - ih * 0.13f));
+                    g.DrawPath(p, path);
+                }
+                DrawArrowHead(g, p, tip, join, size);
+            }
+        }
+
+        private static void DrawRotateIcon(Graphics g, Pen p, float l, float t, float rr, float bb, bool right)
+        {
+            float iw = rr - l;
+            float ih = bb - t;
+            RectangleF arc = new RectangleF(l + iw * 0.08f, t + ih * 0.08f, iw * 0.84f, ih * 0.84f);
+            float size = Math.Min(iw, ih) * 0.18f;
+
+            // A nearly complete circular arrow is the standard rotation metaphor.
+            // Keep the center empty so it stays clean at 25px and remains clearly
+            // different from the short hook used for Undo/Redo.
+            if (right)
+                DrawArcArrow(g, p, arc, 110f, 280f, size);
+            else
+                DrawArcArrow(g, p, arc, 70f, -280f, size);
+        }
+
+        private static void DrawEyedropper(Graphics g, Pen p, float l, float t, float rr, float bb)
+        {
+            float iw = rr - l;
+            float ih = bb - t;
+
+            // Classic pipette silhouette: pointed tip, parallel barrel and
+            // rectangular bulb/cap. No circle, so it cannot read as a magnifier.
+            PointF tip = new PointF(l + iw * 0.06f, bb - ih * 0.04f);
+            PointF lo1 = new PointF(l + iw * 0.20f, bb - ih * 0.24f);
+            PointF lo2 = new PointF(l + iw * 0.34f, bb - ih * 0.10f);
+            PointF hi1 = new PointF(rr - iw * 0.29f, t + ih * 0.25f);
+            PointF hi2 = new PointF(rr - iw * 0.15f, t + ih * 0.39f);
+
+            g.DrawLine(p, tip, lo1);
+            g.DrawLine(p, tip, lo2);
+            g.DrawLine(p, lo1, hi1);
+            g.DrawLine(p, lo2, hi2);
+            g.DrawLine(p, hi1, hi2);
+
+            PointF top1 = new PointF(rr - iw * 0.16f, t + ih * 0.02f);
+            PointF top2 = new PointF(rr - iw * 0.02f, t + ih * 0.16f);
+            g.DrawLine(p, hi1, top1);
+            g.DrawLine(p, hi2, top2);
+            g.DrawLine(p, top1, top2);
+
+            // Shoulder line makes the bulb unmistakable at small sizes.
+            g.DrawLine(p,
+                new PointF(hi1.X - iw * 0.06f, hi1.Y - ih * 0.06f),
+                new PointF(hi2.X + iw * 0.06f, hi2.Y + ih * 0.06f));
+        }
+
+        private static void DrawGear(Graphics g, Pen p, float l, float t, float rr, float bb)
+        {
+            float cx = (l + rr) * 0.5f;
+            float cy = (t + bb) * 0.5f;
+            float ro = Math.Min(rr - l, bb - t) * 0.49f;
+            float ri = ro * 0.73f;
+
+            // Six broad teeth remain readable at 25px. The previous 8-tooth
+            // narrow polygon looked decorative rather than like a settings cog.
+            PointF[] pts = new PointF[24];
+            for (int i = 0; i < 6; i++)
+            {
+                double baseA = -Math.PI / 2.0 + i * Math.PI / 3.0;
+                double a0 = baseA - 0.29;
+                double a1 = baseA - 0.13;
+                double a2 = baseA + 0.13;
+                double a3 = baseA + 0.29;
+                pts[i * 4] = new PointF(cx + (float)Math.Cos(a0) * ri, cy + (float)Math.Sin(a0) * ri);
+                pts[i * 4 + 1] = new PointF(cx + (float)Math.Cos(a1) * ro, cy + (float)Math.Sin(a1) * ro);
+                pts[i * 4 + 2] = new PointF(cx + (float)Math.Cos(a2) * ro, cy + (float)Math.Sin(a2) * ro);
+                pts[i * 4 + 3] = new PointF(cx + (float)Math.Cos(a3) * ri, cy + (float)Math.Sin(a3) * ri);
+            }
+            g.DrawPolygon(p, pts);
+            float hole = ro * 0.31f;
+            g.DrawEllipse(p, cx - hole, cy - hole, hole * 2f, hole * 2f);
+        }
+
+        private static void DrawFlipIcon(Graphics g, Pen p, float l, float t, float rr, float bb, bool horizontal)
+        {
+            float iw = rr - l;
+            float ih = bb - t;
+            float cx = (l + rr) * 0.5f;
+            float cy = (t + bb) * 0.5f;
+            using (Pen dp = new Pen(p.Color, Math.Max(1f, p.Width * 0.64f)))
+            {
+                dp.DashStyle = DashStyle.Dot;
+                dp.StartCap = LineCap.Round;
+                dp.EndCap = LineCap.Round;
+                if (horizontal) g.DrawLine(dp, cx, t, cx, bb);
+                else g.DrawLine(dp, l, cy, rr, cy);
+            }
+
+            if (horizontal)
+            {
+                PointF[] leftTri = new PointF[] {
+                    new PointF(l + iw * 0.07f, cy),
+                    new PointF(cx - iw * 0.13f, t + ih * 0.15f),
+                    new PointF(cx - iw * 0.13f, bb - ih * 0.15f)
+                };
+                PointF[] rightTri = new PointF[] {
+                    new PointF(rr - iw * 0.07f, cy),
+                    new PointF(cx + iw * 0.13f, t + ih * 0.15f),
+                    new PointF(cx + iw * 0.13f, bb - ih * 0.15f)
+                };
+                g.DrawPolygon(p, leftTri);
+                g.DrawPolygon(p, rightTri);
+            }
+            else
+            {
+                PointF[] topTri = new PointF[] {
+                    new PointF(cx, t + ih * 0.07f),
+                    new PointF(l + iw * 0.15f, cy - ih * 0.13f),
+                    new PointF(rr - iw * 0.15f, cy - ih * 0.13f)
+                };
+                PointF[] bottomTri = new PointF[] {
+                    new PointF(cx, bb - ih * 0.07f),
+                    new PointF(l + iw * 0.15f, cy + ih * 0.13f),
+                    new PointF(rr - iw * 0.15f, cy + ih * 0.13f)
+                };
+                g.DrawPolygon(p, topTri);
+                g.DrawPolygon(p, bottomTri);
             }
         }
 

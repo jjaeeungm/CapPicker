@@ -9,11 +9,13 @@ Capture exactly what you need, pick colors precisely, and annotate immediately.
 
 Features / 주요 기능
 - Rectangle (Alt + Shift + S), fixed-size, window, full-screen, last-region, scroll capture
+- Shared 0 / 3 / 5 second capture delay (all capture modes except color picker)
 - Screen color picker (Alt + Shift + C) and image-local picker: live HEX/RGB, pixel grid, 6x-128x zoom
 - Pen, highlighter, shapes, arrow, check, text, eraser, crop, rotation, undo/redo
 - Image zoom up to 1000% (Ctrl + mouse wheel, Ctrl + 0 resets)
 - CapPicker-style print preview + standard Windows print dialog
-- 사각형/고정크기/윈도우창/전체화면/지난영역/스크롤 캡처, 화면·이미지 컬러피커,
+- 사각형/고정크기/윈도우창/전체화면/지난영역/스크롤 캡처, 공통 0 / 3 / 5초 지연 캡처,
+  화면·이미지 컬러피커,
   펜·형광펜·도형·화살표·텍스트·지우개·자르기·회전·되돌리기, 최대 1000% 확대, 인쇄 미리보기
 
 Language / 언어

@@ -1,4 +1,4 @@
-# CapPicker
+﻿# CapPicker
 
 CapPicker is a tiny, fast Windows screenshot, color picker, and quick annotation utility.
 Capture exactly what you need, pick colors precisely, and annotate immediately.
@@ -28,9 +28,11 @@ CapPicker는 작고 빠른 Windows 캡처·컬러피커·빠른 편집 도구입
 
 - Rectangle (`Alt + Shift + S`), fixed-size, window, full-screen, last-region capture
 - Scroll capture: pick a window, auto-scroll it, frames stitched by visual overlap
+- Shared 0 / 3 / 5 second capture delay for rectangle, fixed-size, window, full-screen, last-region, and scroll capture
 - Window capture renders directly via PrintWindow first, with visible-screen fallback for unsupported/GPU windows
 
 - 사각형(`Alt + Shift + S`), 크기지정, 윈도우창, 전체화면, 지난영역, 스크롤 캡처
+- 사각형·크기지정·윈도우·전체화면·지난영역·스크롤에 공통 0 / 3 / 5초 지연 캡처
 
 ### Color Picker / 컬러피커
 

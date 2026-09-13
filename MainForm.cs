@@ -67,7 +67,7 @@ namespace CapPicker
         private ContextMenuStrip delayMenu;
         private FlatButton screenPickerButton;
         private bool scrollCaptureArmed;
-        private int scrollDelaySec;
+        private int captureDelaySec;
 
         private FlatButton undoButton;
         private FlatButton redoButton;
@@ -86,6 +86,7 @@ namespace CapPicker
         private ToolbarSeparator captureSeparator;
         private ToolbarSeparator outputSeparator;
         private ToolbarSeparator delaySeparator;
+        private Control delayLeftGap;
 
         private ToolTip toolTip;
 
@@ -287,6 +288,12 @@ namespace CapPicker
             delaySeparator.Margin = new Padding(4, 0, 4, 0);
             bar.Controls.Add(delaySeparator);
 
+            // Timer button sits centered between its two neighboring separator
+            // lines. This left half of the centering slack is solved together
+            // with captureRightAlignGap in AlignToolbarRightEdges.
+            delayLeftGap = MakeGap(0);
+            bar.Controls.Add(delayLeftGap);
+
             delayButton = MakeIconButton(AppIcon.Timer, "");
             delayButton.Click += ShowDelayMenu;
             bar.Controls.Add(delayButton);
@@ -296,7 +303,7 @@ namespace CapPicker
             bar.Controls.Add(captureRightAlignGap);
 
             captureSeparator = new ToolbarSeparator();
-            captureSeparator.Margin = new Padding(18, 0, 18, 0);
+            captureSeparator.Margin = new Padding(12, 0, 12, 0);
             bar.Controls.Add(captureSeparator);
 
             screenPickerButton = MakeCaptureButton(L10n.T("컬러피커", "Color Picker"), AppIcon.Eyedropper, buttonWidth, StartColorPicker);
@@ -327,7 +334,7 @@ namespace CapPicker
             AddToolIconButton(bar, AppIcon.Ellipse, EditorTool.Ellipse, L10n.T("원형 그리기", "Ellipse"));
             AddToolIconButton(bar, AppIcon.Arrow, EditorTool.Arrow, L10n.T("화살표", "Arrow"));
             AddToolIconButton(bar, AppIcon.Check, EditorTool.Check, L10n.T("강조 체크", "Check mark"));
-            AddToolIconButton(bar, AppIcon.Emoji, EditorTool.Emoji, L10n.T("선택", "Select"));
+            AddToolIconButton(bar, AppIcon.Emoji, EditorTool.Emoji, L10n.T("스탬프", "Stamp"));
             AddToolIconButton(bar, AppIcon.Text, EditorTool.Text, L10n.T("텍스트 입력", "Text"));
             AddToolIconButton(bar, AppIcon.Eraser, EditorTool.Eraser, L10n.T("지우개 - 편집 내용을 원본으로 되돌립니다.", "Eraser - restores edited areas to the original image."));
             AddToolIconButton(bar, AppIcon.PixelEraser, EditorTool.PixelEraser, L10n.T("확장 지우개 - 이미지 픽셀 자체를 지웁니다. PNG는 투명, JPG는 흰색.", "Pixel eraser - removes image pixels. Transparent in PNG, white in JPG."));
@@ -371,7 +378,7 @@ namespace CapPicker
             bar.Controls.Add(editRightAlignGap);
 
             outputSeparator = new ToolbarSeparator();
-            outputSeparator.Margin = new Padding(8, 0, 8, 0);
+            outputSeparator.Margin = new Padding(12, 0, 12, 0);
             bar.Controls.Add(outputSeparator);
 
             copyButton = MakeEditButton(L10n.T("복사", "Copy"), AppIcon.Copy, CalculateEditButtonWidth(L10n.T("복사", "Copy"), 78));
@@ -513,33 +520,64 @@ namespace CapPicker
         {
             if (captureBar == null || editBar == null || captureRightAlignGap == null || editRightAlignGap == null) return;
             if (captureSeparator == null || outputSeparator == null || delaySeparator == null) return;
+            if (delayLeftGap == null || delayButton == null) return;
             if (captureTrailingGap == null || editTrailingGap == null) return;
 
-            // Three shared vertical lines across both rows:
-            // (a) timer-right separator == output separator,
-            // (b) Color Picker start == Copy start,
-            // (c) HEX/RGB chip end == Settings end.
+            // Bottom row keeps its current position.
             int aDelay = WidthUpTo(captureBar, delaySeparator);
             int cTools = WidthUpTo(editBar, editRightAlignGap);
             int gapE = aDelay + delaySeparator.Margin.Left - cTools - outputSeparator.Margin.Left;
             editRightAlignGap.Width = Math.Max(0, gapE);
 
-            int pickerBase = aDelay + FullWidth(delaySeparator) + FullWidth(delayButton) + FullWidth(captureSeparator);
+            // Three shared vertical lines across both rows, measured at the
+            // separators' visual line centers (drawn at Width/2):
+            // (a) timer-right separator == output separator,
+            // (b) Color Picker start == Copy start,
+            // (c) HEX/RGB chip end == Settings end.
+            // captureSeparator/outputSeparator margins are unified, so edge
+            // alignment (b) and center alignment (a) hold at the same time.
+            // The timer button is centered between its two neighboring lines:
+            // delayLeftGap + captureRightAlignGap slack is split accordingly.
+            double delaySepC = SepCenterX(captureBar, delaySeparator);
+            double leftOfGaps = WidthUpTo(captureBar, delayLeftGap);
+            double buttonFull = FullWidth(delayButton);
+
+            double outC = SepCenterX(editBar, outputSeparator);
+            double capLine = captureSeparator.Margin.Left + captureSeparator.Width / 2.0;
+            double total = outC - leftOfGaps - buttonFull - capLine; // delayLeftGap + captureRightAlignGap
+
+            double bl = delayButton.Margin.Left;
+            double bw = delayButton.Width;
+            double centerK = delaySepC - leftOfGaps - 2.0 * bl - bw + buttonFull + capLine;
+
+            double g1 = (total + centerK) / 2.0;
+            double g2 = total - g1;
+            if (g2 < 0) { g2 = 0; g1 = Math.Max(0, total); }
+            if (g1 < 0) { g1 = 0; g2 = Math.Max(0, total); }
+            delayLeftGap.Width = (int)Math.Round(g1);
+            captureRightAlignGap.Width = (int)Math.Round(g2);
+
+            int pickerX = (int)Math.Round(leftOfGaps + delayLeftGap.Width + buttonFull +
+                captureRightAlignGap.Width + FullWidth(captureSeparator));
             int copyX = cTools + editRightAlignGap.Width + FullWidth(outputSeparator);
-            captureRightAlignGap.Width = Math.Max(0, copyX - pickerBase);
-            // Recompute with the gap applied: pickerX moves right by gapC.
-            int pickerX = pickerBase + captureRightAlignGap.Width;
 
             int rightC = pickerX + WidthRange(captureBar, screenPickerButton, colorResult);
             int rightE = copyX + WidthRange(editBar, copyButton, settingsButton);
             int chipGap = rightE - rightC;
             if (chipGap > 0)
             {
-                colorResult.Width = 180 + chipGap;
+                // Grow from the CURRENT width: a hardcoded 180 base collapses
+                // the stretch on every subsequent Align call (288 -> 182).
+                colorResult.Width = colorResult.Width + chipGap;
                 rightC = pickerX + WidthRange(captureBar, screenPickerButton, colorResult);
             }
             captureTrailingGap.Width = Math.Max(0, rightE - rightC);
             editTrailingGap.Width = Math.Max(0, rightC - rightE);
+        }
+
+        private static double SepCenterX(FlowLayoutPanel bar, Control sep)
+        {
+            return WidthUpTo(bar, sep) + sep.Margin.Left + sep.Width / 2.0;
         }
 
         private static int WidthUpTo(FlowLayoutPanel bar, Control stopBefore)
@@ -988,6 +1026,11 @@ namespace CapPicker
         private void StartRectangleCapture(object sender, EventArgs e)
         {
             if (!BeginInteraction()) return;
+            if (!WaitCaptureDelay())
+            {
+                InteractionCancelled();
+                return;
+            }
             SelectionOverlay overlay = new SelectionOverlay(SelectionMode.Rectangle, Size.Empty);
             overlay.Selected += delegate(Rectangle r)
             {
@@ -1030,6 +1073,11 @@ namespace CapPicker
             }
 
             if (!BeginInteraction()) return;
+            if (!WaitCaptureDelay())
+            {
+                InteractionCancelled();
+                return;
+            }
             SelectionOverlay overlay = new SelectionOverlay(SelectionMode.FixedSize, fixedSize);
             overlay.Selected += delegate(Rectangle r)
             {
@@ -1059,6 +1107,11 @@ namespace CapPicker
                 return;
             }
             lastRegion = r;
+            if (!WaitCaptureDelay())
+            {
+                InteractionCancelled();
+                return;
+            }
             try
             {
                 // 선택 테두리가 DWM 합성 화면에서 완전히 사라질 시간을 한 프레임 이상 확보합니다.
@@ -1083,9 +1136,9 @@ namespace CapPicker
             delayItem0.Text = L10n.T("지연 없음", "No delay");
             delayItem3.Text = L10n.T("3초 지연", "3 second delay");
             delayItem5.Text = L10n.T("5초 지연", "5 second delay");
-            delayItem0.Checked = scrollDelaySec == 0;
-            delayItem3.Checked = scrollDelaySec == 3;
-            delayItem5.Checked = scrollDelaySec == 5;
+            delayItem0.Checked = captureDelaySec == 0;
+            delayItem3.Checked = captureDelaySec == 3;
+            delayItem5.Checked = captureDelaySec == 5;
             delayMenu.Show(delayButton, new Point(delayButton.Width, 0));
         }
 
@@ -1116,7 +1169,7 @@ namespace CapPicker
             item.Tag = seconds;
             item.Click += delegate
             {
-                scrollDelaySec = (int)((ToolStripMenuItem)item).Tag;
+                captureDelaySec = (int)((ToolStripMenuItem)item).Tag;
                 UpdateDelayButton();
             };
             return item;
@@ -1125,11 +1178,11 @@ namespace CapPicker
         private void UpdateDelayButton()
         {
             if (delayButton == null) return;
-            delayButton.Badge = scrollDelaySec.ToString();
-            string desc = scrollDelaySec == 0
+            delayButton.Badge = captureDelaySec.ToString();
+            string desc = captureDelaySec == 0
                 ? L10n.T("지연 없음", "No delay")
-                : scrollDelaySec + L10n.T("초 지연", "s delay");
-            toolTip.SetToolTip(delayButton, L10n.T("스크롤 캡처 지연 (클릭하여 선택)", "Scroll capture delay (click to choose)") + ": " + desc);
+                : captureDelaySec + L10n.T("초 지연", "s delay");
+            toolTip.SetToolTip(delayButton, L10n.T("캡처 지연 (클릭하여 선택)", "Capture delay (click to choose)") + ": " + desc);
             delayButton.Invalidate();
         }
 
@@ -1152,7 +1205,7 @@ namespace CapPicker
             // and stop the capture after the first scroll.
             Rectangle region = GetScrollClientRegion(hwnd, r);
             lastRegion = region;
-            if (!WaitScrollDelay())
+            if (!WaitCaptureDelay())
             {
                 InteractionCancelled();
                 return;
@@ -1172,41 +1225,28 @@ namespace CapPicker
             }
         }
 
-        private bool WaitScrollDelay()
+        // Common capture delay for all capture modes. The main form stays hidden
+        // for the entire countdown so the target application keeps focus and
+        // menus/hover/drop-down state are not destroyed. Low-spec mode does NOT
+        // lengthen the user-selected 3/5 second delay; only capture settle times
+        // inside ScrollCapture are relaxed.
+        private bool WaitCaptureDelay()
         {
-            if (scrollDelaySec <= 0) return true;
-            bool shown = false;
-            if (!interactionWasTray && !Visible)
+            if (captureDelaySec <= 0) return true;
+
+            int totalTicks = captureDelaySec * 20; // 50 ms: responsive Esc cancel.
+            for (int i = 0; i < totalTicks; i++)
             {
-                Show();
-                WindowState = restoreWindowState;
-                Activate();
-                shown = true;
-            }
-            try
-            {
-                for (int s = scrollDelaySec; s >= 1; s--)
+                Thread.Sleep(50);
+                Application.DoEvents();
+                try
                 {
-                    SetStatusText(statusColor, String.Format(
-                        L10n.T("스크롤 캡처 {0}초 후 시작 (Esc 취소)", "Scroll capture starts in {0}s (Esc to cancel)"), s));
-                    for (int i = 0; i < 10; i++)
-                    {
-                        Thread.Sleep(100);
-                        Application.DoEvents();
-                        try
-                        {
-                            if ((Native.GetAsyncKeyState(Native.VK_ESCAPE) & 0x8000) != 0)
-                                return false;
-                        }
-                        catch { }
-                    }
+                    if ((Native.GetAsyncKeyState(Native.VK_ESCAPE) & 0x8000) != 0)
+                        return false;
                 }
-                return true;
+                catch { }
             }
-            finally
-            {
-                if (shown && Visible) Hide();
-            }
+            return true;
         }
 
         private static Rectangle GetScrollClientRegion(IntPtr hwnd, Rectangle fallback)
@@ -1235,6 +1275,11 @@ namespace CapPicker
         private void CaptureFullScreen(object sender, EventArgs e)
         {
             if (!BeginInteraction()) return;
+            if (!WaitCaptureDelay())
+            {
+                InteractionCancelled();
+                return;
+            }
             try
             {
                 Thread.Sleep(45);
@@ -1257,6 +1302,11 @@ namespace CapPicker
                 return;
             }
             if (!BeginInteraction()) return;
+            if (!WaitCaptureDelay())
+            {
+                InteractionCancelled();
+                return;
+            }
             CaptureAndDisplay(lastRegion);
         }
 
