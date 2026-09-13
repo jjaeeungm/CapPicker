@@ -22,7 +22,7 @@ namespace CapPicker
         private const int StripRows = 256;
 
         private const int WHEEL_DELTA = 120;
-        private const int WheelNotches = 3;
+        private const int WheelNotches = 2;
 
         private enum ScrollMode
         {
@@ -42,7 +42,7 @@ namespace CapPicker
             if (region.Width < 50 || region.Height < 100)
                 throw new ArgumentException(L10n.T("스크롤 캡처 영역이 너무 작습니다.", "The scroll capture region is too small."));
 
-            int settleMs = AppSettings.LowSpecOptimization ? 600 : 350;
+            int settleMs = AppSettings.LowSpecOptimization ? 800 : 500;
 
             try { Native.SetForegroundWindow(hwnd); } catch { }
             Thread.Sleep(200);
@@ -76,7 +76,9 @@ namespace CapPicker
                     Application.DoEvents();
 
                     SendScroll(hwnd, region, mode);
-                    Thread.Sleep(settleMs);
+                    // PageDown jumps farther and animates longer than a wheel
+                    // burst; give it extra time to fully settle.
+                    Thread.Sleep(settleMs + (mode == ScrollMode.PageDown ? 300 : 0));
                     Application.DoEvents();
 
                     if (IsEscPressed() || !Native.IsWindow(hwnd))
@@ -105,8 +107,9 @@ namespace CapPicker
                         if (overlap < MinOverlap)
                         {
                             failStreak++;
-                            if (failStreak < 2)
-                                continue; // One transient frame (animation/loading) is tolerated.
+                            if (failStreak < 3)
+                                continue; // Transient frames (smooth-scroll animation,
+                                          // lazy loading) are tolerated twice.
                             stopReason = L10n.T("이어붙이기 실패", "Stitch failed");
                             break; // Cannot stitch reliably: keep what we have.
                         }
