@@ -85,6 +85,7 @@ namespace CapPicker
         private Control editTrailingGap;
         private ToolbarSeparator captureSeparator;
         private ToolbarSeparator outputSeparator;
+        private ToolbarSeparator delaySeparator;
 
         private ToolTip toolTip;
 
@@ -282,8 +283,8 @@ namespace CapPicker
             bar.Controls.Add(lastRegionButton);
             bar.Controls.Add(scrollButton);
 
-            ToolbarSeparator delaySeparator = new ToolbarSeparator();
-            delaySeparator.Margin = new Padding(8, 0, 8, 0);
+            delaySeparator = new ToolbarSeparator();
+            delaySeparator.Margin = new Padding(4, 0, 4, 0);
             bar.Controls.Add(delaySeparator);
 
             delayButton = MakeIconButton(AppIcon.Timer, "");
@@ -511,27 +512,31 @@ namespace CapPicker
         private void AlignToolbarRightEdges()
         {
             if (captureBar == null || editBar == null || captureRightAlignGap == null || editRightAlignGap == null) return;
-            if (captureSeparator == null || outputSeparator == null) return;
+            if (captureSeparator == null || outputSeparator == null || delaySeparator == null) return;
             if (captureTrailingGap == null || editTrailingGap == null) return;
 
-            // Step 1: the Color Picker start (above) and the Copy start (below)
-            // share one vertical line.
-            int leftC = WidthUpTo(captureBar, screenPickerButton);
-            int leftE = WidthUpTo(editBar, copyButton);
-            captureRightAlignGap.Width = Math.Max(0, leftE - leftC);
-            editRightAlignGap.Width = Math.Max(0, leftC - leftE);
+            // Three shared vertical lines across both rows:
+            // (a) timer-right separator == output separator,
+            // (b) Color Picker start == Copy start,
+            // (c) HEX/RGB chip end == Settings end.
+            int aDelay = WidthUpTo(captureBar, delaySeparator);
+            int cTools = WidthUpTo(editBar, editRightAlignGap);
+            int gapE = aDelay + delaySeparator.Margin.Left - cTools - outputSeparator.Margin.Left;
+            editRightAlignGap.Width = Math.Max(0, gapE);
 
-            // Step 2: the HEX/RGB chip end (above) and the Settings end (below)
-            // share one vertical line. The chip is flexible: it absorbs a
-            // positive difference so the match is pixel-exact; otherwise the
-            // trailing gaps compensate as before.
-            int rightC = WidthThrough(captureBar, colorResult);
-            int rightE = WidthThrough(editBar, settingsButton);
+            int pickerBase = aDelay + FullWidth(delaySeparator) + FullWidth(delayButton) + FullWidth(captureSeparator);
+            int copyX = cTools + editRightAlignGap.Width + FullWidth(outputSeparator);
+            captureRightAlignGap.Width = Math.Max(0, copyX - pickerBase);
+            // Recompute with the gap applied: pickerX moves right by gapC.
+            int pickerX = pickerBase + captureRightAlignGap.Width;
+
+            int rightC = pickerX + WidthRange(captureBar, screenPickerButton, colorResult);
+            int rightE = copyX + WidthRange(editBar, copyButton, settingsButton);
             int chipGap = rightE - rightC;
             if (chipGap > 0)
             {
                 colorResult.Width = 180 + chipGap;
-                rightC = WidthThrough(captureBar, colorResult);
+                rightC = pickerX + WidthRange(captureBar, screenPickerButton, colorResult);
             }
             captureTrailingGap.Width = Math.Max(0, rightE - rightC);
             editTrailingGap.Width = Math.Max(0, rightC - rightE);
@@ -555,6 +560,24 @@ namespace CapPicker
             {
                 width += c.Width + c.Margin.Left + c.Margin.Right;
                 if (c == stopAfter) break;
+            }
+            return width;
+        }
+
+        private static int FullWidth(Control c)
+        {
+            return c.Width + c.Margin.Left + c.Margin.Right;
+        }
+
+        private static int WidthRange(FlowLayoutPanel bar, Control first, Control lastInclusive)
+        {
+            int width = 0;
+            bool started = false;
+            foreach (Control c in bar.Controls)
+            {
+                if (c == first) started = true;
+                if (started) width += c.Width + c.Margin.Left + c.Margin.Right;
+                if (c == lastInclusive) break;
             }
             return width;
         }

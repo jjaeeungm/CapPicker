@@ -328,7 +328,7 @@ internal static class UiFonts
 
             if (!String.IsNullOrEmpty(Badge))
             {
-                using (Font bf = new Font("Segoe UI", Math.Max(9f, r.Height * 0.30f), FontStyle.Bold, GraphicsUnit.Pixel))
+                using (Font bf = new Font("Segoe UI", Math.Max(8f, r.Height * 0.26f), FontStyle.Regular, GraphicsUnit.Pixel))
                 {
                     Rectangle badgeRect = new Rectangle(0, 0, Width - 2, Height - 2);
                     TextRenderer.DrawText(e.Graphics, Badge, bf, badgeRect, fg,
@@ -513,29 +513,35 @@ internal static class UiFonts
                         break;
                     case AppIcon.Settings:
                         {
-                            int outer = Math.Max(4, r.Width / 3);
-                            int inner = Math.Max(2, r.Width / 7);
+                            // Classic cog: toothed outer ring with center hole.
+                            int outer = Math.Max(6, r.Width / 2);
+                            int inner = Math.Max(3, r.Width / 5);
+                            int tooth = Math.Max(2, r.Width / 8);
                             g.DrawEllipse(p, cx - outer / 2, cy - outer / 2, outer, outer);
-                            g.DrawEllipse(p, cx - inner / 2, cy - inner / 2, inner, inner);
-                            int spoke = Math.Max(3, r.Width / 5);
                             for (int i = 0; i < 8; i++)
                             {
                                 double a = Math.PI * i / 4.0;
-                                int x1 = cx + (int)Math.Round(Math.Cos(a) * (outer / 2.0));
-                                int y1 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0));
-                                int x2 = cx + (int)Math.Round(Math.Cos(a) * (outer / 2.0 + spoke / 2.0));
-                                int y2 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0 + spoke / 2.0));
+                                int x1 = cx + (int)Math.Round(Math.Cos(a) * (outer / 2.0 - 1));
+                                int y1 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0 - 1));
+                                int x2 = cx + (int)Math.Round(Math.Cos(a) * (outer / 2.0 + tooth));
+                                int y2 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0 + tooth));
                                 g.DrawLine(p, x1, y1, x2, y2);
                             }
+                            g.DrawEllipse(p, cx - inner / 2, cy - inner / 2, inner, inner);
                         }
                         break;
                     case AppIcon.Timer:
                         {
-                            // Compact clock face with two hands.
-                            int radius = Math.Max(3, (rr - l - 6) / 2);
-                            g.DrawEllipse(p, cx - radius, cy - radius, radius * 2, radius * 2);
-                            g.DrawLine(p, cx, cy, cx, cy - radius + 1);
-                            g.DrawLine(p, cx, cy, cx + radius - 3, cy + 2);
+                            // Slim clock face with two hands (matches thin icons).
+                            int radius = Math.Max(3, (rr - l - 8) / 2);
+                            using (Pen tp = new Pen(color, Math.Max(1f, w * 0.65f)))
+                            {
+                                tp.StartCap = LineCap.Round;
+                                tp.EndCap = LineCap.Round;
+                                g.DrawEllipse(tp, cx - radius, cy - radius, radius * 2, radius * 2);
+                                g.DrawLine(tp, cx, cy, cx, cy - radius + 1);
+                                g.DrawLine(tp, cx, cy, cx + radius - 3, cy + 2);
+                            }
                             g.FillEllipse(b, cx - 1, cy - 1, 3, 3);
                         }
                         break;
