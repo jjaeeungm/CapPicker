@@ -1053,46 +1053,50 @@ namespace CapPicker
         private void ShowDelayMenu(object sender, EventArgs e)
         {
             if (delayButton == null) return;
-            // The menu must stay rooted while visible: a local without any
-            // owner reference gets GC-collected mid-click (ObjectDisposed).
-            CloseDelayMenu();
+            // Single shared menu for the app lifetime: disposing a drop-down
+            // inside its own Closed event corrupts ToolStripManager state and
+            // crashes the next open with ObjectDisposedException.
+            EnsureDelayMenu();
+            delayItem0.Text = L10n.T("지연 없음", "No delay");
+            delayItem3.Text = L10n.T("3초 지연", "3 second delay");
+            delayItem5.Text = L10n.T("5초 지연", "5 second delay");
+            delayItem0.Checked = scrollDelaySec == 0;
+            delayItem3.Checked = scrollDelaySec == 3;
+            delayItem5.Checked = scrollDelaySec == 5;
+            delayMenu.Show(delayButton, new Point(delayButton.Width, 0));
+        }
+
+        private ToolStripMenuItem delayItem0;
+        private ToolStripMenuItem delayItem3;
+        private ToolStripMenuItem delayItem5;
+
+        private void EnsureDelayMenu()
+        {
+            if (delayMenu != null) return;
             delayMenu = new ContextMenuStrip();
             delayMenu.Renderer = new ToolStripProfessionalRenderer(new DarkMenuColors());
             delayMenu.BackColor = AppTheme.Toolbar;
             delayMenu.ForeColor = AppTheme.Text;
-            delayMenu.Closed += delegate
-            {
-                ContextMenuStrip m = delayMenu;
-                delayMenu = null;
-                try { if (m != null) m.Dispose(); } catch { }
-            };
-            AddDelayMenuItem(delayMenu, L10n.T("지연 없음", "No delay"), 0);
-            AddDelayMenuItem(delayMenu, L10n.T("3초 지연", "3 second delay"), 3);
-            AddDelayMenuItem(delayMenu, L10n.T("5초 지연", "5 second delay"), 5);
-            delayMenu.Show(delayButton, new Point(delayButton.Width, 0));
+            delayItem0 = MakeDelayItem(0);
+            delayItem3 = MakeDelayItem(3);
+            delayItem5 = MakeDelayItem(5);
+            delayMenu.Items.Add(delayItem0);
+            delayMenu.Items.Add(delayItem3);
+            delayMenu.Items.Add(delayItem5);
         }
 
-        private void CloseDelayMenu()
+        private ToolStripMenuItem MakeDelayItem(int seconds)
         {
-            try
-            {
-                if (delayMenu != null) delayMenu.Close();
-            }
-            catch { }
-        }
-
-        private void AddDelayMenuItem(ContextMenuStrip menu, string text, int seconds)
-        {
-            ToolStripMenuItem item = new ToolStripMenuItem(text);
+            ToolStripMenuItem item = new ToolStripMenuItem();
             item.ForeColor = AppTheme.Text;
             item.BackColor = AppTheme.Toolbar;
-            item.Checked = scrollDelaySec == seconds;
+            item.Tag = seconds;
             item.Click += delegate
             {
-                scrollDelaySec = seconds;
+                scrollDelaySec = (int)((ToolStripMenuItem)item).Tag;
                 UpdateDelayButton();
             };
-            menu.Items.Add(item);
+            return item;
         }
 
         private void UpdateDelayButton()
