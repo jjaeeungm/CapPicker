@@ -39,7 +39,7 @@ namespace CapPicker
         // captured so far; only the pre-scroll window picker can cancel fully.
         // Throws on capture failures so the caller can show ex.Message.
         // After return, LastReport describes frames, height, and stop reason.
-        // A per-frame diagnostic log is left at %LocalAppData%\CapPicker\scroll-last.txt.
+        // A per-frame diagnostic log is left next to the exe as scroll-last.log.
         public static string LastReport = "";
         public static string LastLogPath = "";
         public static Bitmap Capture(IntPtr hwnd, Rectangle region)
@@ -383,15 +383,27 @@ namespace CapPicker
             return compared > 0;
         }
 
+        // Debug output location: exe folder for now (.log). Switch back to a
+        // non-writing mode (or LocalAppData) for the release build.
+        // TODO(release): stop writing scroll-last.log / scroll-dbg-*.png.
+        private static string DebugDir()
+        {
+            try { return AppDomain.CurrentDomain.BaseDirectory; }
+            catch
+            {
+                return System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "CapPicker");
+            }
+        }
+
         // Debug frames: saved per run for failure analysis (user's own screen,
         // local disk only). Delete scroll-dbg-*.png after diagnosis.
         private static void ClearDebugFrames()
         {
             try
             {
-                string dir = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "CapPicker");
+                string dir = DebugDir();
                 foreach (string f in System.IO.Directory.GetFiles(dir, "scroll-dbg-*.png"))
                 {
                     try { System.IO.File.Delete(f); } catch { }
@@ -404,9 +416,7 @@ namespace CapPicker
         {
             try
             {
-                string dir = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "CapPicker");
+                string dir = DebugDir();
                 System.IO.Directory.CreateDirectory(dir);
                 bmp.Save(System.IO.Path.Combine(dir, "scroll-dbg-" + index + ".png"),
                     System.Drawing.Imaging.ImageFormat.Png);
@@ -418,11 +428,9 @@ namespace CapPicker
         {
             try
             {
-                string dir = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "CapPicker");
+                string dir = DebugDir();
                 System.IO.Directory.CreateDirectory(dir);
-                string path = System.IO.Path.Combine(dir, "scroll-last.txt");
+                string path = System.IO.Path.Combine(dir, "scroll-last.log");
                 LastLogPath = path;
                 System.IO.File.WriteAllLines(path, log.ToArray());
             }

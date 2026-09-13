@@ -120,7 +120,8 @@ internal static class UiFonts
         Save,
         Print,
         Settings,
-        ScrollCapture
+        ScrollCapture,
+        Timer
     }
 
     internal sealed class FlatButton : Control
@@ -155,6 +156,11 @@ internal static class UiFonts
             get { return indicatorColor; }
             set { indicatorColor = value; Invalidate(); }
         }
+
+        // Small bottom-right badge text (e.g. timer delay seconds).
+        public string Badge { get; set; }
+        // Diagonal slash across the button (e.g. timer delay off).
+        public bool Slashed { get; set; }
 
         public FlatButton()
         {
@@ -296,6 +302,26 @@ internal static class UiFonts
                 {
                     e.Graphics.FillEllipse(b, dot);
                     e.Graphics.DrawEllipse(p, dot);
+                }
+            }
+
+            if (!String.IsNullOrEmpty(Badge))
+            {
+                using (Font bf = new Font("Segoe UI", Math.Max(9f, r.Height * 0.30f), FontStyle.Bold, GraphicsUnit.Pixel))
+                {
+                    Rectangle badgeRect = new Rectangle(0, 0, Width - 2, Height - 2);
+                    TextRenderer.DrawText(e.Graphics, Badge, bf, badgeRect, fg,
+                        TextFormatFlags.Bottom | TextFormatFlags.Right | TextFormatFlags.NoPadding);
+                }
+            }
+
+            if (Slashed)
+            {
+                using (Pen sp = new Pen(fg, Math.Max(2f, Height * 0.07f)))
+                {
+                    sp.StartCap = LineCap.Round;
+                    sp.EndCap = LineCap.Round;
+                    e.Graphics.DrawLine(sp, Width - 7, 7, 7, Height - 7);
                 }
             }
         }
@@ -490,6 +516,16 @@ internal static class UiFonts
                                 int y2 = cy + (int)Math.Round(Math.Sin(a) * (outer / 2.0 + spoke / 2.0));
                                 g.DrawLine(p, x1, y1, x2, y2);
                             }
+                        }
+                        break;
+                    case AppIcon.Timer:
+                        {
+                            // Clock face with hands at 12 and ~4 o'clock.
+                            int radius = Math.Max(4, (rr - l - 2) / 2);
+                            g.DrawEllipse(p, cx - radius, cy - radius, radius * 2, radius * 2);
+                            g.DrawLine(p, cx, cy, cx, cy - radius + 2);
+                            g.DrawLine(p, cx, cy, cx + radius - 4, cy + 3);
+                            g.FillEllipse(b, cx - 1, cy - 1, 3, 3);
                         }
                         break;
                 }

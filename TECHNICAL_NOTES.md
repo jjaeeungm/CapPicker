@@ -32,8 +32,9 @@ User-facing documentation lives in [README.md](README.md) / [README.txt](README.
   for the trimmed prefix.
 - Memory peak is two frames plus the result (incremental stitching).
 - Vertical scrolling only.
-- A per-run diagnostic log (`%LocalAppData%\CapPicker\scroll-last.txt`)
-  records region, per-frame equality/overlap/best scores, and the stop reason.
+- A per-run diagnostic log (`scroll-last.log` next to the exe, plus
+  `scroll-dbg-*.png` frames) records region, per-frame equality/overlap/best
+  scores, and the stop reason. TODO(release): stop writing these files.
 
 ## Capture engine / 캡처 엔진
 

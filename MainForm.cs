@@ -63,8 +63,10 @@ namespace CapPicker
         private FlatButton fullScreenButton;
         private FlatButton lastRegionButton;
         private FlatButton scrollButton;
+        private FlatButton delayButton;
         private FlatButton screenPickerButton;
         private bool scrollCaptureArmed;
+        private int scrollDelaySec;
 
         private FlatButton undoButton;
         private FlatButton redoButton;
@@ -276,6 +278,11 @@ namespace CapPicker
             bar.Controls.Add(fullScreenButton);
             bar.Controls.Add(lastRegionButton);
             bar.Controls.Add(scrollButton);
+
+            delayButton = MakeIconButton(AppIcon.Timer, "");
+            delayButton.Click += CycleScrollDelay;
+            bar.Controls.Add(delayButton);
+            UpdateDelayButton();
 
             captureRightAlignGap = MakeGap(0);
             bar.Controls.Add(captureRightAlignGap);
@@ -1004,6 +1011,24 @@ namespace CapPicker
             }
         }
 
+        private void CycleScrollDelay(object sender, EventArgs e)
+        {
+            scrollDelaySec = scrollDelaySec == 0 ? 3 : (scrollDelaySec == 3 ? 5 : 0);
+            UpdateDelayButton();
+        }
+
+        private void UpdateDelayButton()
+        {
+            if (delayButton == null) return;
+            delayButton.Badge = scrollDelaySec == 0 ? "" : scrollDelaySec.ToString();
+            delayButton.Slashed = scrollDelaySec == 0;
+            string desc = scrollDelaySec == 0
+                ? L10n.T("지연 없음", "No delay")
+                : L10n.T("지연 ", "Delay ") + scrollDelaySec + L10n.T("초", "s");
+            toolTip.SetToolTip(delayButton, L10n.T("스크롤 캡처 지연: ", "Scroll capture delay: ") + desc);
+            delayButton.Invalidate();
+        }
+
         private void StartScrollCapture(object sender, EventArgs e)
         {
             if (!BeginInteraction()) return;
@@ -1023,6 +1048,11 @@ namespace CapPicker
             // and stop the capture after the first scroll.
             Rectangle region = GetScrollClientRegion(hwnd, r);
             lastRegion = region;
+            if (!WaitScrollDelay())
+            {
+                InteractionCancelled();
+                return;
+            }
             try
             {
                 // Let the highlight border leave the composited screen first.
@@ -1035,6 +1065,43 @@ namespace CapPicker
             {
                 InteractionCancelled();
                 MessageBox.Show(this, L10n.T("스크롤 캡처 실패:\r\n", "Scroll capture failed:\r\n") + ex.Message, "CapPicker");
+            }
+        }
+
+        private bool WaitScrollDelay()
+        {
+            if (scrollDelaySec <= 0) return true;
+            bool shown = false;
+            if (!interactionWasTray && !Visible)
+            {
+                Show();
+                WindowState = restoreWindowState;
+                Activate();
+                shown = true;
+            }
+            try
+            {
+                for (int s = scrollDelaySec; s >= 1; s--)
+                {
+                    SetStatusText(statusColor, String.Format(
+                        L10n.T("스크롤 캡처 {0}초 후 시작 (Esc 취소)", "Scroll capture starts in {0}s (Esc to cancel)"), s));
+                    for (int i = 0; i < 10; i++)
+                    {
+                        Thread.Sleep(100);
+                        Application.DoEvents();
+                        try
+                        {
+                            if ((Native.GetAsyncKeyState(Native.VK_ESCAPE) & 0x8000) != 0)
+                                return false;
+                        }
+                        catch { }
+                    }
+                }
+                return true;
+            }
+            finally
+            {
+                if (shown && Visible) Hide();
             }
         }
 
@@ -1167,7 +1234,8 @@ namespace CapPicker
             foreach (Control c in editBar.Controls)
             {
                 FlatButton b = c as FlatButton;
-                if (b != null) b.Enabled = enabled;
+                // Settings must stay enabled with or without a capture.
+                if (b != null && b != settingsButton) b.Enabled = enabled;
             }
 
             foreach (KeyValuePair<EditorTool, FlatButton> pair in toolButtons)
@@ -1362,6 +1430,7 @@ namespace CapPicker
             ApplyCaptureButtonLanguage(fullScreenButton, L10n.T("전체화면", "Full Screen"), captureWidth);
             ApplyCaptureButtonLanguage(lastRegionButton, L10n.T("지난영역", "Last Region"), captureWidth);
             ApplyCaptureButtonLanguage(scrollButton, L10n.T("스크롤", "Scroll"), captureWidth);
+            UpdateDelayButton();
             ApplyCaptureButtonLanguage(screenPickerButton, L10n.T("컬러피커", "Color Picker"), captureWidth);
 
             SetToolLanguage(EditorTool.Pen, L10n.T("일반펜", "Pen"));
