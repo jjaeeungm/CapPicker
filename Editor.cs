@@ -951,7 +951,11 @@ namespace CapPicker
                 {
                     using (Pen p = BuildPen(false))
                     {
-                        p.DashStyle = DashStyle.Dash;
+                        // 화살표 미리보기는 실선으로 그립니다. 점선 샤프트 + CustomEndCap
+                        // 조합은 GDI+에서 시작점에 떨어져 보이는 점/조각을 만들고,
+                        // 확정(실선) 결과와도 달라집니다.
+                        if (tool != EditorTool.Arrow)
+                            p.DashStyle = DashStyle.Dash;
                         DrawShape(e.Graphics, tool, p, start, now, shapeFill);
                     }
                 }
@@ -1895,6 +1899,10 @@ namespace CapPicker
 
         private static void DrawArrow(Graphics g, Pen p, Point a, Point b)
         {
+            // 클릭만 하고 드래그하지 않은 경우(길이 0)에는 화살촉만 덩그러니
+            // 찍히지 않도록 그리지 않습니다. 확정 경로는 호출 측에서 거리 2 이상을
+            // 보장하지만, 미리보기의 첫 프레임(start == now)도 여기서 걸러집니다.
+            if (Distance(a, b) < 2) return;
             using (AdjustableArrowCap cap = new AdjustableArrowCap(
                 Math.Max(4f, p.Width * 1.7f),
                 Math.Max(5f, p.Width * 2.2f), true))
