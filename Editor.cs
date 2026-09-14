@@ -1914,11 +1914,15 @@ namespace CapPicker
             if (Distance(a, b) < 2) return;
             // AdjustableArrowCap의 width/height는 펜 너비 배율로 해석됩니다.
             // 펜 너비를 곱한 값을 넘기면 이중 스케일로 거대한 화살촉이 그려지므로
-            // 펜 너비로 나눈 값을 넘겨 의도한 크기(약 1.7w x 2.2w)를 얻습니다.
+            // 펜 너비로 나눈 값을 넘깁니다. 가는 펜에서도 촉이 보이도록
+            // 실제 크기 하한(14 x 18px)을 둡니다.
             float w = Math.Max(1f, p.Width);
+            float divisor = Math.Max(2f, w);
+            float headW = Math.Max(14f, 1.7f * w);
+            float headH = Math.Max(18f, 2.2f * w);
             using (AdjustableArrowCap cap = new AdjustableArrowCap(
-                Math.Max(4f, w * 1.7f) / w,
-                Math.Max(5f, w * 2.2f) / w, true))
+                headW / divisor,
+                headH / divisor, true))
             {
                 p.CustomEndCap = cap;
                 g.DrawLine(p, a, b);
@@ -2664,10 +2668,11 @@ namespace CapPicker
             int pad = Math.Max(4, strokeWidth / 2 + 5);
             if (tool == EditorTool.Arrow)
             {
-                // 실제 화살촉 너비(Max(4, 1.7w))의 절반 + 안티앨리어싱 여유.
-                // 범위가 모자라면 이전 미리보기 프레임의 촉 조각이 잔상으로 남습니다.
+                // 실제 화살촉 크기(Max(14, 1.7w) x Max(18, 2.2w))의 절반 +
+                // 안티앨리어싱 여유. 범위가 모자라면 이전 미리보기 프레임의
+                // 촉 조각이 잔상으로 남습니다.
                 float w = Math.Max(1, strokeWidth);
-                int arrowPad = (int)Math.Ceiling(Math.Max(4f, w * 1.7f) / 2f) + 3;
+                int arrowPad = (int)Math.Ceiling(Math.Max(14f, w * 1.7f) / 2f) + 3;
                 if (arrowPad > pad) pad = arrowPad;
             }
             return pad;
@@ -2684,7 +2689,7 @@ namespace CapPicker
             double len = Distance(a, b);
             if (len >= 1)
             {
-                float headH = Math.Max(5f, w * 2.2f) + 3;
+                float headH = Math.Max(18f, w * 2.2f) + 3;
                 tx = b.X + (a.X - b.X) / len * headH;
                 ty = b.Y + (a.Y - b.Y) / len * headH;
             }
