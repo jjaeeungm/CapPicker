@@ -1007,6 +1007,11 @@ namespace CapPicker
             interactionWasTray = trayMode || !Visible;
             if (Visible) Hide();
             Application.DoEvents();
+            // Hide()가 반영된 프레임이 DWM 합성 화면에 올라올 때까지 기다립니다.
+            // 정착 없이 바로 캡처하면 전체화면이나 오버레이 배경에 CapPicker 창이
+            // 반투명 잔상으로 잡히는 경우가 있습니다.
+            try { Native.DwmFlush(); } catch { }
+            Thread.Sleep(100);
             return true;
         }
 

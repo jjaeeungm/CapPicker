@@ -1561,9 +1561,18 @@ namespace CapPicker
                 {
                     SaveUndo();
                     redo.Clear();
-                    Rectangle shapeBounds = tool == EditorTool.Check ? NormalizeAspect(start, now, 1.0f) : Normalize(start, now);
-                    int shapePad = Math.Max(4, strokeWidth / 2 + 4);
-                    shapeBounds.Inflate(shapePad, shapePad);
+                    Rectangle shapeBounds;
+                    if (tool == EditorTool.Arrow)
+                    {
+                        // ArrowBounds가 촉까지 포함한 패딩 범위를 반환합니다.
+                        shapeBounds = ArrowBounds(start, now);
+                    }
+                    else
+                    {
+                        shapeBounds = tool == EditorTool.Check ? NormalizeAspect(start, now, 1.0f) : Normalize(start, now);
+                        int shapePad = ShapeInvalidPad(tool);
+                        shapeBounds.Inflate(shapePad, shapePad);
+                    }
                     shapeBounds.Intersect(imageBounds);
                     finalDirty = shapeBounds;
                     using (Graphics g = Graphics.FromImage(current))
@@ -1903,9 +1912,13 @@ namespace CapPicker
             // 찍히지 않도록 그리지 않습니다. 확정 경로는 호출 측에서 거리 2 이상을
             // 보장하지만, 미리보기의 첫 프레임(start == now)도 여기서 걸러집니다.
             if (Distance(a, b) < 2) return;
+            // AdjustableArrowCap의 width/height는 펜 너비 배율로 해석됩니다.
+            // 펜 너비를 곱한 값을 넘기면 이중 스케일로 거대한 화살촉이 그려지므로
+            // 펜 너비로 나눈 값을 넘겨 의도한 크기(약 1.7w x 2.2w)를 얻습니다.
+            float w = Math.Max(1f, p.Width);
             using (AdjustableArrowCap cap = new AdjustableArrowCap(
-                Math.Max(4f, p.Width * 1.7f),
-                Math.Max(5f, p.Width * 2.2f), true))
+                Math.Max(4f, w * 1.7f) / w,
+                Math.Max(5f, w * 2.2f) / w, true))
             {
                 p.CustomEndCap = cap;
                 g.DrawLine(p, a, b);
@@ -2646,10 +2659,52 @@ namespace CapPicker
             if (!dirty.IsEmpty) Invalidate(dirty);
         }
 
+        private int ShapeInvalidPad(EditorTool tool)
+        {
+            int pad = Math.Max(4, strokeWidth / 2 + 5);
+            if (tool == EditorTool.Arrow)
+            {
+                // 실제 화살촉 너비(Max(4, 1.7w))의 절반 + 안티앨리어싱 여유.
+                // 범위가 모자라면 이전 미리보기 프레임의 촉 조각이 잔상으로 남습니다.
+                float w = Math.Max(1, strokeWidth);
+                int arrowPad = (int)Math.Ceiling(Math.Max(4f, w * 1.7f) / 2f) + 3;
+                if (arrowPad > pad) pad = arrowPad;
+            }
+            return pad;
+        }
+
+        private Rectangle ArrowBounds(Point a, Point b)
+        {
+            // 화살촉은 끝점(b)을 꼭짓점으로 드래그 반대 방향으로 뻗습니다.
+            // 선분이 촉 길이보다 짧으면 시작점(a)을 넘어서까지 그려지므로,
+            // 무효화 범위는 촉 끝(tail)까지 포함해야 잔상이 남지 않습니다.
+            float w = Math.Max(1, strokeWidth);
+            double tx = b.X;
+            double ty = b.Y;
+            double len = Distance(a, b);
+            if (len >= 1)
+            {
+                float headH = Math.Max(5f, w * 2.2f) + 3;
+                tx = b.X + (a.X - b.X) / len * headH;
+                ty = b.Y + (a.Y - b.Y) / len * headH;
+            }
+            int l = (int)Math.Floor(Math.Min(Math.Min(a.X, b.X), tx));
+            int t = (int)Math.Floor(Math.Min(Math.Min(a.Y, b.Y), ty));
+            int r = (int)Math.Ceiling(Math.Max(Math.Max(a.X, b.X), tx)) + 1;
+            int bottom = (int)Math.Ceiling(Math.Max(Math.Max(a.Y, b.Y), ty)) + 1;
+            Rectangle bounds = Rectangle.FromLTRB(l, t, r, bottom);
+            int pad = ShapeInvalidPad(EditorTool.Arrow);
+            bounds.Inflate(pad, pad);
+            bounds.Intersect(imageBounds);
+            return bounds;
+        }
+
         private Rectangle ShapePreviewLogicalBounds(Point endpoint)
         {
+            if (tool == EditorTool.Arrow)
+                return ArrowBounds(start, endpoint);
             Rectangle r = tool == EditorTool.Check ? NormalizeAspect(start, endpoint, 1.0f) : Normalize(start, endpoint);
-            int pad = Math.Max(4, strokeWidth / 2 + 5);
+            int pad = ShapeInvalidPad(tool);
             r.Inflate(pad, pad);
             r.Intersect(imageBounds);
             return r;
